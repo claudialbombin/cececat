@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/cececat-logo.svg" width="190" alt="CeceCat: un gato hablando por un micrófono en un podio"/>
+
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:5c1830,100:bd8a2e&height=220&section=header&text=CeceCat&fontSize=75&fontColor=fffdf9&animation=fadeIn&fontAlignY=36&desc=Gestor%20de%20torneos%20de%20debate%20por%20parejas&descAlignY=58&descSize=19&descColor=fbf3e6" width="100%" alt="CeceCat"/>
 
 <a href="#-qué-es">
