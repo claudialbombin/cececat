@@ -1,43 +1,215 @@
-# CeceCat 🐾
+<div align="center">
 
-Gestor de torneos de debate por parejas (estilo académico), inspirado en Tabbycat, hecho a medida para el **Trofeo Rector de Comillas**.
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:5c1830,100:bd8a2e&height=220&section=header&text=CeceCat&fontSize=75&fontColor=fffdf9&animation=fadeIn&fontAlignY=36&desc=Gestor%20de%20torneos%20de%20debate%20por%20parejas&descAlignY=58&descSize=19&descColor=fbf3e6" width="100%" alt="CeceCat"/>
 
-Es una web estática de un solo archivo (`index.html`): todo el algoritmo de emparejamientos, puntuación y clasificación corre en el propio navegador. Por eso funciona perfectamente en GitHub Pages. Además del guardado local de siempre, ya tiene activado el envío remoto de puntuaciones por parte de los jueces (ver más abajo) usando tu propio proyecto Firebase gratuito "CeceCat" y tu propia cuenta de EmailJS — no hace falta configurar nada más, funciona en cuanto lo publiques.
+<a href="#-qué-es">
+  <img src="https://readme-typing-svg.demolab.com/?font=Fira+Code&weight=500&size=21&duration=2800&pause=900&color=BD8A2E&center=true&vCenter=true&width=650&lines=Un+solo+archivo.+Sin+backend.+Sin+instalaci%C3%B3n.;Emparejamientos%2C+salas+y+clasificaci%C3%B3n+en+el+navegador.;Jueces+que+puntúan+en+vivo+desde+su+propio+móvil.;Copia+de+seguridad+autom%C3%A1tica%2C+por+ronda%2C+en+tu+disco." alt="Typing SVG" />
+</a>
 
-## Qué hace
+<br/><br/>
 
-- Crear un torneo es un asistente guiado de 6 pasos, con botón "Atrás" en cada uno sin perder lo ya rellenado: 1) nombre del torneo, 2) formato de debate (y apartados de puntuación si es académico), 3) número de parejas, 4) cómo poner los nombres, 5) salas/aulas, 6) jueces.
-  - **Formato (paso 2):** Académico (1 pareja a favor vs 1 en contra) o **British Parliamentary** (4 parejas por sala: OG, OO, CG y CO, rankeadas 1º–4º).
-  - **Puntuación:**
-    - **Académico:** tú decides los apartados de puntuación del torneo (p.ej. "Contenido", "Estilo", "Estrategia" — vienen esos tres de ejemplo, pero puedes borrarlos y poner los tuyos; hace falta al menos uno). En "Ronda actual" se introduce la puntuación de cada apartado para cada pareja; se suman solas para dar el total, y gana quien más sume (sin empates, igual que antes). Puedes añadir o quitar apartados más tarde, a mitad de torneo, desde la pestaña "Datos" — el cambio solo afecta a las rondas que aún no hayas guardado, las ya jugadas conservan su propio desglose.
-    - **BP:** se introduce la puntuación de cada orador de la pareja (Orador 1 y Orador 2), un número entre 50 y 100 cada uno — el propio formulario no deja meter nada fuera de ese rango. Se suman los dos oradores para dar el total de la pareja, y ese total marca el orden 1º–4º de la sala.
-  - **Número de parejas (paso 3):** si el formato es BP y el número no es múltiplo de 4, la propia pantalla avisa de cuántas parejas **Swing** (Swing 1, Swing 2...) se añadirán automáticamente para completar las salas — así nunca hay descansos por descuadre en BP, en vez de eso juegan parejas de relleno que no compiten por el trofeo.
-  - **Nombres (paso 4):** solo el número (se llaman "Pareja 1", "Pareja 2"...), añadiéndolas una a una (con un contador que avisa cuándo ya se ha llegado al número indicado en el paso 3), o importando un archivo `.txt` o `.pdf` con un nombre por línea (vista previa editable antes de confirmar).
-  - **Salas/aulas (paso 5):** opcional. Puedes ponerle nombre real a cada sala (p.ej. "Aula 1 - A1"); las que falten (o todas, si no añades ninguna) se numeran solas como "Sala 1", "Sala 2"...
-  - **Jueces (paso 6):** opcional. Se añaden uno a uno, marcando si son trainee, y con su email (obligatorio). En cuanto añades un juez le llega automáticamente por correo su enlace personal — el mismo durante todo el torneo, así no hace falta generarle uno nuevo cada ronda. Si no añades ninguno, puedes hacerlo luego desde la pestaña Jueces (también con email obligatorio, y con el mismo envío automático).
-- **Pestaña Draw**, pensada para proyectar en pantalla: una tabla grande y limpia con la sala, las parejas en columnas según su posición (Favor/Contra, u OG/OO/CG/CO en BP) y, si has añadido jueces, la columna de jueces de cada sala (el primero es el juez principal, marcado con Ⓒ; los trainees se marcan con Ⓣ). Tiene un botón de pantalla completa. Si no has generado aún los emparejamientos de la ronda, te deja generarlos ahí mismo.
-- Los jueces se reparten solos entre las salas al generar cada ronda: si hay al menos tantos jueces como salas, cada sala tiene un juez principal (repartido intentando que nadie presida muchas más veces que el resto, y evitando que un trainee presida si hay alguien más disponible); los jueces que sobran se añaden como jueces adicionales, también repartidos de forma equilibrada. Si hay menos jueces que salas, alguna se queda sin asignar (se ve como "Sin asignar" en el Draw).
-- Las pestañas **Parejas**, **Salas** y **Jueces** permiten corregir nombres, añadir salas o jueces nuevos, o quitarlos, en cualquier momento del torneo sin perder resultados.
-- Genera los emparejamientos de cada ronda: empareja/agrupa por clasificación (puntos de equipo → puntos de ítem), evita repetir rivales cuando es posible (formato académico), y reparte los roles/posiciones equilibrando quién los ha ocupado menos veces.
-- Introduce los puntos de cada enfrentamiento (por apartados en académico, por orador en BP, ver "Puntuación" arriba; no se permiten empates en el total, igual que el original) y calcula el ganador o el ranking 1º–4º automáticamente, con la suma en vivo mientras vas rellenando. La pestaña "Ronda actual" (donde se introducen los puntos) muestra el mismo nombre de sala y los mismos jueces que el Draw.
-- Lleva la clasificación (con columnas según el formato elegido), el historial de rondas (con sala, jueces y el desglose de puntos de cada enfrentamiento) y un resumen del torneo. Las parejas Swing aparecen marcadas con una etiqueta y no cuentan para el "líder actual" del resumen.
-- En formato académico, si el número de parejas es impar, sigue señalando quién descansa esa ronda (ahí no se usan parejas Swing, solo en BP).
-- Guarda el torneo automáticamente en el navegador (localStorage) para que si se recarga la página no se pierda nada.
-- Permite descargar en cualquier momento una copia de seguridad (`.json`, para recuperar el torneo exacto) y un informe de resultados (`.txt`, legible, con sala y jueces de cada enfrentamiento, y las parejas Swing marcadas).
-- Permite cargar una copia `.json` guardada antes, por si se cambia de ordenador o de navegador (enlace visible ya en el primer paso del asistente).
-- La lectura de PDF funciona sin conexión a internet (la librería va incrustada en el propio archivo), pero si el PDF tiene un formato muy elaborado (columnas, tablas) puede no salir perfecto — por eso siempre hay una vista previa editable antes de crear el torneo.
-- **(Opcional) Envío de puntuaciones por parte de los jueces, con enlace personal y persistente.** Si activas Firebase y EmailJS (ver la sección de más abajo, ya están activados en este `index.html`), cada juez tiene **un único enlace para todo el torneo** — se genera al añadirlo y se le envía automáticamente por correo (no hay que generar ni reenviar nada ronda a ronda). Ese enlace abre una vista solo para él, sin navegación ni datos del resto del torneo, con dos pestañas: **"Mi turno actual"**, que muestra la sala y ronda que le toca ahora mismo (o un aviso si esa ronda no le toca juzgar), y **"Draw"**, la misma tabla que se proyecta en pantalla. Dentro de cada sala solo hay **un juez principal (el primero asignado, el mismo que se ve marcado con Ⓒ en el Draw)**: solo él ve el formulario de puntuación y puede enviarla (con los mismos apartados/oradores y límites que tengas configurados); el resto de jueces de esa sala ven un aviso pidiéndoles que le compartan su valoración a él. En cuanto el juez principal envía, a central le aparece "✓ Recibido" en "Ronda actual" y los números se rellenan solos; tú sigues teniendo la última palabra: revisas y pulsas "Guardar resultados" igual que siempre. También puedes copiar el enlace del juez principal a mano en cualquier momento con el botón "Copiar enlace del juez principal" en "Ronda actual". Si un juez no tiene el enlace, no tiene email, o falla la conexión, simplemente metes los puntos a mano como se ha hecho siempre — nada de esto es obligatorio.
+![Un solo archivo](https://img.shields.io/badge/Un%20solo%20archivo-index.html-bd8a2e?style=for-the-badge)
+![Sin backend](https://img.shields.io/badge/Backend-cero-5c1830?style=for-the-badge)
+![GitHub Pages](https://img.shields.io/badge/Hosting-GitHub%20Pages-222222?style=for-the-badge&logo=github)
+![Firebase](https://img.shields.io/badge/Puntuaciones%20en%20vivo-Firestore-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
+![EmailJS](https://img.shields.io/badge/Enlaces%20por%20email-EmailJS-1f8a4c?style=for-the-badge&logo=maildotru&logoColor=white)
+![Vanilla JS](https://img.shields.io/badge/JavaScript-vanilla-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![Offline PDF](https://img.shields.io/badge/Lectura%20de%20PDF-offline-b1273f?style=for-the-badge)
 
-## Cómo publicarlo en GitHub Pages
+</div>
+
+## 🐾 Qué es
+
+CeceCat es un gestor de torneos de debate por parejas: crea el torneo con un asistente guiado, genera los emparejamientos de cada ronda, reparte los jueces entre las salas, recoge las puntuaciones (a mano o en vivo desde el móvil de cada juez) y lleva la clasificación — todo desde una única página web.
+
+No hay servidor propio, no hay base de datos que mantener, no hay instalación. `index.html` es **un solo archivo**: todo el algoritmo de emparejamientos, la asignación de jueces, el cálculo de puntos y la clasificación corren enteros en el navegador de quien lo abra. Eso significa que se puede alojar gratis en GitHub Pages y que sigue funcionando sin conexión salvo por dos piezas opcionales — el envío de puntuaciones en vivo y el email a los jueces — que si no se configuran, simplemente no se activan y todo lo demás sigue igual.
+
+<div align="center">
+
+### 🧭 Tabla de contenidos
+
+[Cómo se organiza un torneo](#-cómo-se-organiza-un-torneo) · [El asistente guiado](#-el-asistente-guiado) · [Draw, ronda y clasificación](#-draw-ronda-actual-y-clasificación) · [Jueces que rotan de verdad](#-jueces-reparto-automático-que-rota-de-verdad) · [Puntuaciones en vivo](#-puntuaciones-en-vivo-desde-el-móvil-de-cada-juez) · [Copias de seguridad](#-copias-de-seguridad-tres-capas) · [Publicarlo en GitHub Pages](#-publicarlo-en-github-pages) · [Configurar Firestore + EmailJS](#-configurar-el-envío-de-puntuaciones) · [Durante el torneo](#-durante-el-torneo)
+
+</div>
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:bd8a2e,100:5c1830&height=3&section=header" width="100%"/>
+
+## 🗂 Cómo se organiza un torneo
+
+```mermaid
+flowchart LR
+    W["🧙 Asistente<br/>6 pasos"] --> D["📋 Generar<br/>emparejamientos"]
+    D --> R["✏️ Introducir<br/>puntuaciones"]
+    R --> S["🏆 Clasificación<br/>+ Historial"]
+    S -- "queda ronda" --> D
+    S -- "torneo terminado" --> F(["🐾 Fin"])
+```
+
+Cada ronda repite el mismo ciclo: generar el draw, puntuar, ver la clasificación actualizada y pasar a la siguiente. El estado completo del torneo — parejas, jueces, rondas jugadas, puntos — vive en un único objeto en memoria que se guarda solo, así que se puede cerrar la pestaña a media ronda y seguir donde se dejó.
+
+## 🧙 El asistente guiado
+
+<img src="https://capsule-render.vercel.app/api?type=soft&color=fbf3e6&height=2&section=header" width="100%"/>
+
+Crear un torneo son 6 pasos, con botón "Atrás" en cada uno sin perder lo ya rellenado:
+
+```mermaid
+flowchart LR
+    A["1️⃣ Nombre"] --> B["2️⃣ Formato<br/>Académico / BP"]
+    B --> C["3️⃣ Nº de parejas<br/>+ Swing si hace falta"]
+    C --> D["4️⃣ Nombres<br/>uno a uno · .txt · .pdf"]
+    D --> E["5️⃣ Salas"]
+    E --> G["6️⃣ Jueces"]
+    G --> Z(["🐾 Torneo creado"])
+```
+
+<details>
+<summary><b>1️⃣ Nombre del torneo</b></summary>
+<br/>
+
+Es el único paso obligatorio de verdad: el botón "Siguiente" no avanza (y avisa) si se deja en blanco.
+</details>
+
+<details>
+<summary><b>2️⃣ Formato — Académico o British Parliamentary</b></summary>
+<br/>
+
+- **Académico:** 1 pareja a favor contra 1 en contra. Tú decides los apartados de puntuación del torneo (por ejemplo "Contenido", "Estilo", "Estrategia" vienen de ejemplo, pero se pueden borrar y poner los tuyos — hace falta al menos uno). Se pueden añadir o quitar apartados más tarde, a mitad de torneo, desde la pestaña "Datos"; el cambio solo afecta a las rondas que aún no se hayan guardado.
+- **British Parliamentary:** 4 parejas por sala (OG, OO, CG, CO), puntuando cada orador de la pareja entre 50 y 100 — el propio formulario no deja meter nada fuera de rango. El total de la pareja marca el orden 1º–4º de la sala.
+
+En ambos formatos, no se permiten empates en el total: si dos parejas empatan, hay que corregir la puntuación antes de poder guardar.
+</details>
+
+<details>
+<summary><b>3️⃣ Número de parejas — y las Swing en BP</b></summary>
+<br/>
+
+Si el formato es BP y el número no es múltiplo de 4, la propia pantalla avisa de cuántas parejas **Swing** (Swing 1, Swing 2…) se añaden automáticamente para completar las salas. Así nunca hay descansos por descuadre en BP: en su lugar juegan parejas de relleno que no compiten por la clasificación final. Las Swing se calculan una sola vez al crear el torneo y se mantienen fijas toda la competición.
+</details>
+
+<details>
+<summary><b>4️⃣ Nombres de las parejas</b></summary>
+<br/>
+
+Tres formas de darlas de alta, a elegir:
+- Solo el número (se llaman "Pareja 1", "Pareja 2"…).
+- Una a una, con un contador que avisa cuándo ya se ha llegado al número indicado en el paso 3.
+- Importando un `.txt` o `.pdf` con un nombre por línea — con vista previa editable antes de confirmar, por si el PDF tiene un formato complicado (columnas, tablas) y no sale perfecto a la primera.
+
+La lectura de PDF funciona **sin conexión a internet**: la librería va incrustada en el propio `index.html`.
+</details>
+
+<details>
+<summary><b>5️⃣ Salas</b></summary>
+<br/>
+
+Opcional. Se le puede poner nombre real a cada sala (p. ej. "Aula 1 - A1"); las que falten — o todas, si no se añade ninguna — se numeran solas como "Sala 1", "Sala 2"…
+</details>
+
+<details>
+<summary><b>6️⃣ Jueces</b></summary>
+<br/>
+
+Opcional. Se añaden uno a uno, marcando si son **en prácticas** ("trainee") y con su email. En cuanto se añade un juez con el envío remoto activado (ver más abajo), le llega automáticamente por correo su enlace personal — el mismo durante todo el torneo, así no hace falta generarle uno nuevo ronda a ronda.
+</details>
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:bd8a2e,100:5c1830&height=3&section=header" width="100%"/>
+
+## 📋 Draw, ronda actual y clasificación
+
+- **Pestaña Draw**, pensada para proyectar en pantalla: una tabla grande con la sala, las parejas en columnas según su posición y, si hay jueces, la columna de jueces de cada sala. Tiene botón de pantalla completa, y si aún no se han generado los emparejamientos de la ronda, deja generarlos ahí mismo.
+- **Ronda actual** empareja/agrupa por clasificación (puntos de equipo → puntos de ítem), evita repetir rivales cuando es posible, y reparte los roles/posiciones equilibrando quién los ha ocupado menos veces. Ahí se introducen los puntos de cada enfrentamiento, con la suma en vivo mientras se rellena.
+- **Clasificación** e **Historial** llevan la cuenta completa: columnas según el formato, desglose de cada enfrentamiento con sala y jueces, y un resumen del torneo. Las parejas Swing van marcadas con una etiqueta y no cuentan para el "líder actual".
+- **Parejas**, **Salas** y **Jueces** permiten corregir nombres, o añadir/quitar salas y jueces, en cualquier momento sin perder resultados ya guardados.
+
+## ⚖️ Jueces: reparto automático que rota de verdad
+
+<img src="https://capsule-render.vercel.app/api?type=soft&color=fbf3e6&height=2&section=header" width="100%"/>
+
+Al generar cada ronda, los jueces se reparten solos entre las salas — y no de cualquier manera:
+
+- 🚫 **Un juez en prácticas nunca es el principal de una sala.** El principal (el que aparece marcado con Ⓒ, el único que puede enviar la puntuación desde su enlace) siempre es un juez no-trainee si hay alguno disponible en esa ronda.
+- 🔁 **Todos los jueces juzgan en todas las rondas**, repartidos lo más equilibrado posible según cuántas veces ha sido asignado cada uno.
+- 🔄 **El reparto evita, cuando es posible, dos repeticiones:** que un juez vuelva a coincidir en sala con otro juez con el que ya ha estado, y que vuelva a juzgar a una pareja a la que ya juzgó antes. En cada ronda, el algoritmo compara todas las combinaciones posibles de (sala, juez) y elige la que menos repite — no decide sala por sala en un orden fijo, así que quién acaba compartiendo mesa con quién cambia de verdad ronda a ronda.
+- 🩹 **Se autorrepara sola:** si se importa una copia de seguridad antigua, o se recarga la página, CeceCat reconstruye desde cero (a partir de las rondas ya jugadas) el historial de qué ha juzgado cada juez y con quién ha coincidido, así que el reparto tiene siempre memoria completa aunque el navegador se haya cerrado a medio torneo.
+
+> Con muy pocas parejas y jueces, el margen para variar es limitado por pura combinatoria (si solo hay 3 jueces y 2 salas, tarde o temprano alguien repite). Cuantas más parejas y jueces tenga el torneo, más fácil es rotar sin repetir a nadie.
+
+## ⚡ Puntuaciones en vivo desde el móvil de cada juez
+
+<img src="https://capsule-render.vercel.app/api?type=soft&color=fbf3e6&height=2&section=header" width="100%"/>
+
+**(Opcional).** Si se activan Firebase y EmailJS (ver [más abajo](#-configurar-el-envío-de-puntuaciones)), cada juez tiene **un único enlace para todo el torneo** — se genera al añadirlo y se le envía automáticamente por correo, sin generar ni reenviar nada ronda a ronda.
+
+```mermaid
+sequenceDiagram
+    participant M as 🖥️ Mesa central
+    participant FS as ☁️ Firestore
+    participant E as 📧 EmailJS
+    participant J as 🧑‍⚖️ Juez principal
+
+    M->>E: Al añadir el juez
+    E-->>J: Email con su enlace personal (único, para todo el torneo)
+    M->>FS: Genera los emparejamientos de la ronda
+    J->>FS: Abre su enlace, ve su sala y su ronda
+    J->>FS: Introduce y envía la puntuación
+    FS-->>M: "✓ Recibido" en Ronda actual
+    M->>M: Revisa y pulsa "Guardar resultados"
+```
+
+Ese enlace abre una vista solo para ese juez, sin navegación ni datos del resto del torneo, con dos pestañas:
+
+- **"Mi turno actual"** — la sala y ronda que le toca ahora mismo, o un aviso si esa ronda no le toca juzgar.
+- **"Draw"** — la misma tabla que se proyecta en pantalla.
+
+Dentro de cada sala solo el juez principal ve el formulario de puntuación y puede enviarla; el resto de jueces de esa sala ven un aviso pidiéndoles que le compartan su valoración a él. Si una sala se queda sin juez principal (por ejemplo, si solo tiene jueces en prácticas), se avisa de que nadie puede enviar desde ahí y hay que introducir los puntos a mano.
+
+Central sigue teniendo la última palabra siempre: en cuanto llega una puntuación aparece "✓ Recibido" y los números se rellenan solos, pero hay que revisar y pulsar "Guardar resultados" igual que si se hubiera metido a mano. Si un juez no tiene el enlace, no tiene email, o falla la conexión, se meten los puntos a mano como siempre — nada de esto es obligatorio.
+
+## 💾 Copias de seguridad, tres capas
+
+<img src="https://capsule-render.vercel.app/api?type=soft&color=fbf3e6&height=2&section=header" width="100%"/>
+
+<table width="100%">
+<tr>
+<td width="33%" valign="top">
+
+### 1️⃣ Automática en el navegador
+
+Cada cambio se guarda solo en `localStorage`. Si se recarga la página, no se pierde nada — siempre que sea el mismo navegador y ordenador.
+
+</td>
+<td width="33%" valign="top">
+
+### 2️⃣ Manual, descargable
+
+Botones para descargar en cualquier momento una copia exacta (`.json`, para recuperar el torneo tal cual) y un informe legible (`.txt`, con sala, jueces y desglose de cada enfrentamiento). El `.json` se puede volver a cargar para continuar desde otro ordenador.
+
+</td>
+<td width="33%" valign="top">
+
+### 3️⃣ Automática en disco, por ronda
+
+Al crear el torneo, se puede elegir una carpeta del ordenador (se abre directamente dentro de Descargas). A partir de ahí, cada cambio guarda solo — sin tener que hacer nada más — un snapshot en `<carpeta>/<torneo>/r1`, `r2`, `r3`… con el `.json` y el `.txt` de esa ronda. Así, si el navegador o el ordenador fallasen, los resultados ya están en disco.
+
+</td>
+</tr>
+</table>
+
+> La copia en disco usa la *File System Access API*, así que solo funciona en navegadores basados en Chromium (Chrome, Edge). En el resto, esa opción simplemente no aparece y las otras dos capas siguen funcionando igual.
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:bd8a2e,100:5c1830&height=3&section=header" width="100%"/>
+
+## 🚀 Publicarlo en GitHub Pages
 
 1. Crea un repositorio nuevo en GitHub (puede llamarse `cececat` o como prefieras). Puede ser público o privado — si es privado, GitHub Pages necesita un plan que lo permita; si no estás segura, hazlo público, no hay datos sensibles en el código, solo el propio programa.
-2. Sube este archivo `index.html` a la raíz del repositorio (arrastrándolo en la web de GitHub, o con `git`):
+2. Sube `index.html` a la raíz del repositorio (arrastrándolo en la web de GitHub, o con `git`):
 
    ```bash
    cd cececat
    git init
    git add index.html README.md
-   git commit -m "CeceCat: gestor del Trofeo Rector de Comillas"
+   git commit -m "CeceCat: primera versión"
    git branch -M main
    git remote add origin https://github.com/TU_USUARIO/cececat.git
    git push -u origin main
@@ -51,15 +223,19 @@ Es una web estática de un solo archivo (`index.html`): todo el algoritmo de emp
    https://TU_USUARIO.github.io/cececat/
    ```
 
-6. Comparte ese enlace con tu profesor. Puede usarlo directamente desde el navegador, sin instalar nada.
+6. Comparte ese enlace con quien vaya a llevar la mesa central. Puede usarlo directamente desde el navegador, sin instalar nada.
 
-## Envío de puntuaciones por parte de los jueces
+## 🔥 Configurar el envío de puntuaciones
 
-Ya está activado, usando tu proyecto Firebase gratuito **"CeceCat"** (`cececat-d3ae2`, plan Spark — $0/mes) y tu cuenta de **EmailJS** (plan gratuito — 200 emails/mes). No tienes que hacer nada más — en cuanto publiques `index.html` en GitHub Pages, cada juez que añadas recibe automáticamente su enlace personal por email, y ya puede usarlo durante todo el torneo.
+<img src="https://capsule-render.vercel.app/api?type=soft&color=fbf3e6&height=2&section=header" width="100%"/>
 
-### Firestore
+Hace falta un proyecto de **Firebase** (Firestore, plan gratuito Spark) y una cuenta de **EmailJS** (plan gratuito, 200 emails/mes). Si ya están configurados dentro de `index.html`, este paso está hecho — en cuanto se publique en GitHub Pages, cada juez que se añada recibe su enlace automáticamente.
 
-Firestore está creado (Standard edition, región `eur3`, Europa). Las reglas publicadas en Firebase → Firestore Database → Reglas son estas:
+<details>
+<summary><b>☁️ Firestore — reglas</b></summary>
+<br/>
+
+En Firebase → Firestore Database (modo producción) → Reglas, hay que publicar estas:
 
 ```
 rules_version = '2';
@@ -79,34 +255,46 @@ service cloud.firestore {
 }
 ```
 
-Hay dos colecciones: `cececat_draws` guarda el Draw completo de cada torneo (para que la pestaña "Draw" de cada juez lo pueda leer sin ver el resto de datos del torneo), y `cececat_judgerooms` guarda, por cada juez (`judgeToken`, el código largo y aleatorio de su enlace personal), la sala/ronda que le toca ahora y su puntuación cuando la envía. Solo el documento de un juez puede quedar bloqueado tras enviarse (mientras su ronda actual no cambie); en cuanto le toca una ronda nueva, su documento vuelve a aceptar un envío. **Nota de seguridad:** estas reglas son deliberadamente simples y abiertas — no hay usuarios ni contraseñas, la única "llave" es el propio enlace de cada juez (difícil de adivinar). Es un nivel de seguridad razonable para un torneo académico interno, pero no subas nada más sensible a esta base de datos.
+Hay dos colecciones: `cececat_draws` guarda el Draw completo de cada torneo (para que la pestaña "Draw" de cada juez lo pueda leer sin ver el resto de datos del torneo), y `cececat_judgerooms` guarda, por cada juez (`judgeToken`, el código largo y aleatorio de su enlace personal), la sala/ronda que le toca ahora y su puntuación cuando la envía. Solo el documento de un juez puede quedar bloqueado tras enviarse (mientras su ronda actual no cambie); en cuanto le toca una ronda nueva, su documento vuelve a aceptar un envío.
 
-### EmailJS
+**Nota de seguridad:** estas reglas son deliberadamente simples y abiertas — no hay usuarios ni contraseñas, la única "llave" es el propio enlace de cada juez (difícil de adivinar). Es un nivel razonable para un torneo interno, pero no subas nada más sensible a esta base de datos.
+</details>
 
-El envío automático del enlace usa tu cuenta de EmailJS, conectada a tu Gmail (`claudialbombin@gmail.com`) como servicio de envío, con una plantilla ("Judge Link Notification") que usa las variables `to_email`, `to_name`, `tournament_name` y `judge_link`. Los tres valores ya están puestos en `index.html` (busca `const EMAILJS_CONFIG = {` cerca del principio del `<script>`): tu Public Key, el Service ID de Gmail y el Template ID. El plan gratuito de EmailJS permite 200 emails al mes — de sobra para un torneo, pero si alguna vez lo agotas, EmailJS avisa por email y los jueces sin email enviado pueden seguir usando el botón "Copiar enlace del juez principal" a mano.
+<details>
+<summary><b>📧 EmailJS — plantilla y conexión</b></summary>
+<br/>
 
-Antes del torneo conviene probarlo: crea un torneo de prueba con un juez con tu propio email, comprueba que te llega el correo con el enlace, ábrelo en tu móvil (o en modo incógnito) y comprueba que el envío de puntuación llega a central en segundos.
+El envío automático del enlace usa una cuenta de EmailJS conectada a un Gmail como servicio de envío, con una plantilla que usa las variables `to_email`, `to_name`, `tournament_name` y `judge_link`. Los tres valores de conexión van en `index.html` (busca `const EMAILJS_CONFIG = {` cerca del principio del `<script>`): la Public Key, el Service ID y el Template ID.
 
-Si alguna vez quieres desactivar solo el envío automático de emails (Firestore seguiría funcionando, y podrías seguir copiando el enlace a mano), basta con volver a poner `publicKey: "TU_PUBLIC_KEY"` en `EMAILJS_CONFIG`. Si quieres desactivar todo el envío remoto de puntuaciones, vuelve a poner `apiKey: "TU_API_KEY"` en `const FIREBASE_CONFIG = {` — el resto de CeceCat sigue funcionando igual, todo a mano.
+Antes del torneo conviene probarlo: crea un torneo de prueba con un juez con tu propio email, comprueba que llega el correo con el enlace, ábrelo en el móvil (o en modo incógnito) y comprueba que el envío de puntuación llega a central en segundos.
 
-Si prefieres usar tus propios proyectos en vez de estos: en Firebase, crea uno en [console.firebase.google.com](https://console.firebase.google.com), activa Firestore Database (modo producción), añade una app web desde Configuración del proyecto → General → "Tus apps" (icono `</>`), copia su `firebaseConfig` sobre los 6 valores de `FIREBASE_CONFIG` en `index.html`, y pega las reglas de arriba en su Firestore → Reglas. En EmailJS, crea una cuenta gratuita en [emailjs.com](https://www.emailjs.com), conecta un servicio de email (Gmail u otro), crea una plantilla con las cuatro variables `to_email`, `to_name`, `tournament_name` y `judge_link` (usa `{{to_email}}` como "To Email" de la plantilla), y copia tu Public Key (Account → General) y los IDs de servicio/plantilla sobre `EMAILJS_CONFIG` en `index.html`.
+Para desactivar solo el envío automático de emails (Firestore seguiría funcionando, copiando el enlace a mano con el botón "Copiar enlace del juez principal"), basta con volver a poner `publicKey: "TU_PUBLIC_KEY"` en `EMAILJS_CONFIG`. Para desactivar todo el envío remoto de puntuaciones, vuelve a poner `apiKey: "TU_API_KEY"` en `const FIREBASE_CONFIG = {` — el resto de CeceCat sigue funcionando igual, todo a mano.
+</details>
 
-## Durante el torneo — cosas a tener en cuenta
+<details>
+<summary><b>🔧 Usar tus propios proyectos en vez de los ya configurados</b></summary>
+<br/>
 
-- Los datos se guardan **en el navegador que se esté usando**. Si tu profesor va a manejar el torneo, que lo haga siempre desde el mismo ordenador/navegador, o que descargue la copia de seguridad (`.json`) al terminar cada ronda desde la pestaña "Datos y copia de seguridad" para poder continuar desde otro sitio si hace falta.
-- Conviene descargar esa copia de seguridad tras cada ronda por si se borra el historial del navegador.
+En Firebase, crea un proyecto en [console.firebase.google.com](https://console.firebase.google.com), activa Firestore Database (modo producción), añade una app web desde Configuración del proyecto → General → "Tus apps" (icono `</>`), y copia su `firebaseConfig` sobre los 6 valores de `FIREBASE_CONFIG` en `index.html`. Pega las reglas de arriba en su Firestore → Reglas.
+
+En EmailJS, crea una cuenta gratuita en [emailjs.com](https://www.emailjs.com), conecta un servicio de email (Gmail u otro), crea una plantilla con las cuatro variables `to_email`, `to_name`, `tournament_name` y `judge_link` (usa `{{to_email}}` como "To Email" de la plantilla), y copia tu Public Key (Account → General) y los IDs de servicio/plantilla sobre `EMAILJS_CONFIG` en `index.html`.
+</details>
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:bd8a2e,100:5c1830&height=3&section=header" width="100%"/>
+
+## 🧭 Durante el torneo
+
+- Los datos se guardan **en el navegador que se esté usando**. Si quien lleva la mesa central va a manejar el torneo, mejor que lo haga siempre desde el mismo ordenador/navegador, o que descargue la copia de seguridad al terminar cada ronda para poder continuar desde otro sitio si hace falta — o, mejor aún, que active la copia automática en disco al crear el torneo.
 - Los nombres de las parejas se pueden editar en cualquier momento desde la pestaña "Parejas", sin perder resultados ya guardados.
-- Para empezar un torneo nuevo desde cero hay un botón en "Datos y copia de seguridad → Zona de peligro" (borra el actual, así que conviene exportar antes si se quiere conservar).
-- Si usas los enlaces de jueces, cada juez tiene un enlace único y persistente para todo el torneo (se lo envías, o se lo reenvías, una sola vez) — al generar los emparejamientos de cada ronda nueva, su enlace muestra solos la sala y el turno que le toque en cada momento, sin necesidad de generar ni reenviar nada.
+- Para empezar un torneo nuevo desde cero hay un botón en "Datos → Zona de peligro" (borra el actual, así que conviene exportar antes si se quiere conservar).
+- Cada juez tiene un enlace único y persistente para todo el torneo (se envía, o se reenvía, una sola vez) — al generar los emparejamientos de cada ronda nueva, su enlace muestra solo la sala y el turno que le toque en cada momento, sin generar ni reenviar nada.
 
-## Diferencias con el script original (`tabby_memoria.py`)
+<div align="center">
 
-- "Equipos" pasa a llamarse "Parejas" en toda la interfaz.
-- Es una interfaz visual en el navegador en vez de un menú de terminal.
-- El guardado en disco (`.txt` / `.json`) se sustituye por guardado automático en el navegador + botones de descarga manual, porque una página estática no puede escribir archivos en el ordenador por sí sola.
-- Se añaden dos formatos (el original solo tenía el equivalente a "Académico"), tres formas de dar de alta a las parejas, un asistente guiado paso a paso, las parejas Swing en BP, salas/aulas con nombre real, jueces, y la pestaña Draw para proyectar.
-- En modo BP, para mantener el sistema "reducido y propio" que pediste, el emparejamiento agrupa las salas simplemente por orden de clasificación (bloques de 4), sin el sistema de pull-up/pull-down de Tabbycat ni evitar rivales repetidos entre salas — sí se equilibra, en cambio, qué posición (OG/OO/CG/CO) ha ocupado menos veces cada pareja.
-- Las parejas Swing se calculan una sola vez, al crear el torneo (según el número real de parejas que introduzcas), y se mantienen fijas toda la competición — no se van añadiendo o quitando ronda a ronda.
-- El reparto de jueces también es una versión simplificada: no tiene en cuenta experiencia, conflictos de interés ni historial de qué parejas ha visto cada juez — solo intenta que nadie presida ni sea asignado muchas más veces que el resto.
-- Cada sala mantiene el mismo nombre en todas las rondas (la sala en la posición 1 de la clasificación siempre usa el primer nombre de sala que pusiste, y así sucesivamente) — no se sortean las aulas entre rondas.
-- La lógica de emparejamientos, asignación de roles y cálculo de clasificación es una traducción fiel del script original a JavaScript (verificada con pruebas automáticas para número par e impar de parejas, en ambos formatos).
+<br/>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:bd8a2e,100:5c1830&height=140&section=footer&animation=fadeIn" width="100%"/>
+
+**Hecho con 🐾 y JavaScript.**
+
+</div>
