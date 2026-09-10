@@ -2,7 +2,7 @@
 
 <img src="assets/cececat-logo.svg" width="900" height="229" alt="CeceCat: un gato hablando por un micrófono en un podio"/>
 
-
+<br/><br/>
 
 ![Un solo archivo](https://img.shields.io/badge/Un%20solo%20archivo-index.html-bd8a2e?style=for-the-badge)
 ![Sin backend](https://img.shields.io/badge/Backend-cero-5c1830?style=for-the-badge)
