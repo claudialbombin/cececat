@@ -233,6 +233,7 @@
   <div class="status" id="headerStatus" style="display:none;">
     <div id="hsTournament"></div>
     <div>Ronda actual: <b id="hsRound">1</b> · <span id="hsFormat"></span></div>
+    <div id="autosaveStatus" style="margin-top:4px; font-size:.85em;"></div>
   </div>
 </header>
 
@@ -540,6 +541,8 @@
     <div class="card">
       <h2>Copia de seguridad</h2>
       <p class="hint">CeceCat guarda el torneo automáticamente en este navegador. Aun así, descarga una copia tras cada ronda por si cambias de ordenador o borras el navegador.</p>
+      <p class="hint">También puede guardar, sin que tengas que hacer nada, una copia en una carpeta de tu ordenador (JSON y TXT, en una subcarpeta por ronda: r1, r2…) cada vez que cambie algo — así, si el navegador fallase, no perderías los resultados ya introducidos.</p>
+      <div id="autosaveCardStatus" style="margin-bottom:10px;"></div>
       <div class="footer-actions">
         <button class="btn gold" id="btnExportJson">Descargar estado (.json)</button>
         <button class="btn ghost" id="btnExportTxt">Descargar resultados (.txt)</button>
@@ -1009,6 +1012,7 @@ function applyRoomResult(result, roundNum){
 
 function saveState(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ console.warn("No se pudo guardar en localStorage", e); }
+  scheduleAutosaveToDisk();
 }
 function loadState(){
   try{
@@ -1016,6 +1020,207 @@ function loadState(){
     if (!raw) return null;
     return JSON.parse(raw);
   }catch(e){ return null; }
+}
+
+/* ---------- Copia automática en disco (carpeta local, por ronda) ---------- */
+/* Usa la File System Access API (Chrome/Edge). Cada vez que se guarda el
+   estado, se escribe (con un pequeño retraso para no saturar) un snapshot
+   completo en <carpeta elegida>/<torneo>/r<N>/estado.json + resultados.txt,
+   donde N es la ronda en curso. Así, si el navegador o el ordenador
+   fallasen, los resultados ya están en disco y no hay que rellenarlos
+   de nuevo. */
+
+const AUTOSAVE_SUPPORTED = typeof window.showDirectoryPicker === 'function';
+let autosaveDirHandle = null;
+let autosaveTournamentHandle = null;
+let autosaveFolderName = null;
+let autosaveEnabled = false;
+let autosaveNeedsReconnect = false;
+let autosaveDebounceTimer = null;
+
+function idbOpen(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('cececat_fs', 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('handles'); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbGet(key){
+  try{
+    const db = await idbOpen();
+    return await new Promise((resolve) => {
+      const tx = db.transaction('handles', 'readonly');
+      const r = tx.objectStore('handles').get(key);
+      r.onsuccess = () => resolve(r.result || null);
+      r.onerror = () => resolve(null);
+    });
+  }catch(e){ return null; }
+}
+async function idbSet(key, value){
+  try{
+    const db = await idbOpen();
+    return await new Promise((resolve) => {
+      const tx = db.transaction('handles', 'readwrite');
+      tx.objectStore('handles').put(value, key);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  }catch(e){ return false; }
+}
+async function idbClear(){
+  try{
+    const db = await idbOpen();
+    const tx = db.transaction('handles', 'readwrite');
+    tx.objectStore('handles').clear();
+  }catch(e){ /* noop */ }
+}
+
+async function setupAutosave(){
+  if (!AUTOSAVE_SUPPORTED){
+    showToast('Tu navegador no permite guardar copias automáticas en una carpeta. Usa los botones de descarga manual.');
+    return;
+  }
+  const quiere = confirm('¿Quieres que CeceCat guarde copias de seguridad automáticas (JSON y TXT, por ronda) en una carpeta de tu ordenador? Se te pedirá elegir o crear una carpeta (se recomienda dentro de Descargas). Así, si el navegador fallase, no tendrías que rellenar nada de nuevo.');
+  if (!quiere) return;
+  try{
+    const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'downloads' });
+    const perm = await dirHandle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted'){
+      showToast('No se ha concedido permiso para guardar copias automáticas.');
+      return;
+    }
+    const folderName = slugify(state.tournamentName);
+    const tournamentHandle = await dirHandle.getDirectoryHandle(folderName, { create: true });
+    autosaveDirHandle = dirHandle;
+    autosaveTournamentHandle = tournamentHandle;
+    autosaveFolderName = folderName;
+    autosaveEnabled = true;
+    autosaveNeedsReconnect = false;
+    await idbSet('dirHandle', dirHandle);
+    await idbSet('folderName', folderName);
+    showToast(`Copia automática activada en la carpeta "${folderName}".`);
+    renderAutosaveStatus();
+    scheduleAutosaveToDisk();
+  }catch(e){
+    if (e && e.name !== 'AbortError') console.warn('No se pudo configurar la copia automática', e);
+  }
+}
+
+async function reconnectAutosave(){
+  if (!AUTOSAVE_SUPPORTED) return;
+  const dirHandle = await idbGet('dirHandle');
+  const folderName = await idbGet('folderName');
+  if (!dirHandle){ setupAutosave(); return; }
+  try{
+    const perm = await dirHandle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted'){
+      showToast('No se ha concedido permiso para reanudar la copia automática.');
+      return;
+    }
+    autosaveDirHandle = dirHandle;
+    autosaveFolderName = folderName || slugify(state.tournamentName);
+    autosaveTournamentHandle = await dirHandle.getDirectoryHandle(autosaveFolderName, { create: true });
+    autosaveEnabled = true;
+    autosaveNeedsReconnect = false;
+    showToast('Copia automática reconectada.');
+    renderAutosaveStatus();
+    scheduleAutosaveToDisk();
+  }catch(e){
+    console.warn('No se pudo reconectar la copia automática', e);
+    showToast('No se pudo reconectar. Prueba a activar la copia automática de nuevo.');
+  }
+}
+
+async function tryRestoreAutosave(){
+  if (!AUTOSAVE_SUPPORTED || !state) return;
+  const dirHandle = await idbGet('dirHandle');
+  const folderName = await idbGet('folderName');
+  if (!dirHandle){ renderAutosaveStatus(); return; }
+  try{
+    const perm = await dirHandle.queryPermission({ mode: 'readwrite' });
+    if (perm === 'granted'){
+      autosaveDirHandle = dirHandle;
+      autosaveFolderName = folderName || slugify(state.tournamentName);
+      autosaveTournamentHandle = await dirHandle.getDirectoryHandle(autosaveFolderName, { create: true });
+      autosaveEnabled = true;
+      autosaveNeedsReconnect = false;
+    } else {
+      autosaveEnabled = false;
+      autosaveNeedsReconnect = true;
+    }
+  }catch(e){
+    autosaveEnabled = false;
+    autosaveNeedsReconnect = false;
+  }
+  renderAutosaveStatus();
+}
+
+function scheduleAutosaveToDisk(){
+  if (!autosaveEnabled || !autosaveTournamentHandle) return;
+  clearTimeout(autosaveDebounceTimer);
+  autosaveDebounceTimer = setTimeout(writeAutosaveToDisk, 800);
+}
+
+async function writeAutosaveToDisk(){
+  if (!autosaveEnabled || !autosaveTournamentHandle || !state) return;
+  try{
+    const roundFolderName = 'r' + state.currentRound;
+    const roundHandle = await autosaveTournamentHandle.getDirectoryHandle(roundFolderName, { create: true });
+    const jsonHandle = await roundHandle.getFileHandle('estado.json', { create: true });
+    const jsonWritable = await jsonHandle.createWritable();
+    await jsonWritable.write(JSON.stringify(state, null, 2));
+    await jsonWritable.close();
+    const txtHandle = await roundHandle.getFileHandle('resultados.txt', { create: true });
+    const txtWritable = await txtHandle.createWritable();
+    await txtWritable.write(buildTxtReport());
+    await txtWritable.close();
+    renderAutosaveStatus(true);
+  }catch(e){
+    console.warn('No se pudo escribir la copia automática en disco', e);
+    if (e && (e.name === 'NotAllowedError')){
+      autosaveEnabled = false;
+      autosaveNeedsReconnect = true;
+      showToast('Se perdió el permiso para guardar copias automáticas en disco. Reconéctala si quieres.');
+      renderAutosaveStatus();
+    }
+  }
+}
+
+function renderAutosaveStatus(justSaved){
+  const headerEl = document.getElementById('autosaveStatus');
+  const cardEl = document.getElementById('autosaveCardStatus');
+
+  // Cabecera: solo texto compacto, sin botones.
+  let headerHtml = '';
+  if (AUTOSAVE_SUPPORTED && autosaveEnabled){
+    headerHtml = `💾 Copia automática en "${escapeHtml(autosaveFolderName || '')}"${justSaved ? ' — guardado' : ''}`;
+  } else if (AUTOSAVE_SUPPORTED && autosaveNeedsReconnect){
+    headerHtml = '⚠️ Copia automática desconectada';
+  }
+  if (headerEl){
+    headerEl.innerHTML = headerHtml;
+    headerEl.style.display = (state && headerHtml) ? 'block' : 'none';
+  }
+
+  // Tarjeta "Copia de seguridad" (pestaña Datos): texto + botón de acción.
+  let cardHtml = '';
+  if (!AUTOSAVE_SUPPORTED){
+    cardHtml = '<span class="hint">Tu navegador no permite guardar copias automáticas en una carpeta (funciona en Chrome/Edge); usa los botones de descarga manual.</span>';
+  } else if (autosaveEnabled){
+    cardHtml = `<span class="hint">💾 Copia automática activa en la carpeta "${escapeHtml(autosaveFolderName || '')}"${justSaved ? ' (guardado)' : ''}.</span>`;
+  } else if (autosaveNeedsReconnect){
+    cardHtml = '<button type="button" class="btn ghost" id="btnReconnectAutosave">⚠️ Reconectar copia automática</button>';
+  } else {
+    cardHtml = '<button type="button" class="btn ghost" id="btnEnableAutosave">📁 Activar copia automática en carpeta</button>';
+  }
+  if (cardEl){
+    cardEl.innerHTML = cardHtml;
+    const reconnectBtn = document.getElementById('btnReconnectAutosave');
+    if (reconnectBtn) reconnectBtn.addEventListener('click', reconnectAutosave);
+    const enableBtn = document.getElementById('btnEnableAutosave');
+    if (enableBtn) enableBtn.addEventListener('click', setupAutosave);
+  }
 }
 
 /* ---------- UI: utilidades ---------- */
@@ -1405,6 +1610,7 @@ document.getElementById('btnCreateTournament').addEventListener('click', () => {
     showToast(`Torneo creado con ${wizSwingsNeeded} pareja${wizSwingsNeeded>1?'s':''} Swing de relleno.`);
   }
   renderAll();
+  setupAutosave();
 });
 
 /* ---------- Navegación ---------- */
@@ -1430,6 +1636,7 @@ function renderAll(){
   document.getElementById('hsTournament').textContent = state.tournamentName;
   document.getElementById('hsRound').textContent = state.currentRound;
   document.getElementById('hsFormat').textContent = state.format === 'bp' ? 'British Parliamentary' : 'Académico';
+  renderAutosaveStatus();
   const activeBtn = document.querySelector('nav#mainNav button.active');
   switchTab(activeBtn ? activeBtn.dataset.tab : 'ronda');
 }
@@ -2055,6 +2262,7 @@ function renderSummary(){
   `;
   document.getElementById('scoreCategoriesCard').style.display = state.format === 'bp' ? 'none' : 'block';
   if (state.format !== 'bp') renderDataCategoryList();
+  renderAutosaveStatus();
 }
 
 /* -- apartados de puntuación (pestaña Datos, edición posterior) -- */
@@ -2208,6 +2416,12 @@ document.getElementById('btnResetTournament').addEventListener('click', () => {
   if (confirm('¿Seguro que quieres borrar el torneo actual de este navegador? Esta acción no se puede deshacer (descarga antes una copia si la necesitas).')){
     localStorage.removeItem(STORAGE_KEY);
     state = null;
+    autosaveDirHandle = null;
+    autosaveTournamentHandle = null;
+    autosaveFolderName = null;
+    autosaveEnabled = false;
+    autosaveNeedsReconnect = false;
+    idbClear();
     document.getElementById('mainNav').style.display = 'none';
     document.getElementById('headerStatus').style.display = 'none';
     document.querySelectorAll('.tab-content').forEach(s => s.style.display = 'none');
@@ -2433,6 +2647,7 @@ async function initJudgeMode(token){
     ensureJudgeAndTournamentTokens(saved);
     state = saved;
     renderAll();
+    tryRestoreAutosave();
   } else {
     goToStep(1);
   }
