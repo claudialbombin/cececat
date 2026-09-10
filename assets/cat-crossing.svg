@@ -1,0 +1,40 @@
+<svg width="100%" height="90" viewBox="0 0 800 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Un gatito cruzando de izquierda a derecha">
+  <g>
+    <animateTransform attributeName="transform" type="translate" from="-140,0" to="820,0" dur="11s" repeatCount="indefinite"/>
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="0,0;0,-4;0,0;0,-4;0,0" keyTimes="0;0.25;0.5;0.75;1" dur="0.55s" repeatCount="indefinite"/>
+
+      <path d="M18,55 Q-6,35 4,14" fill="none" stroke="#bd8a2e" stroke-width="7" stroke-linecap="round">
+        <animateTransform attributeName="transform" type="rotate" values="0 18 55;12 18 55;0 18 55;-12 18 55;0 18 55" dur="1.1s" repeatCount="indefinite"/>
+      </path>
+
+      <g fill="#5c1830">
+        <rect x="38" y="58" width="9" height="16" rx="4">
+          <animateTransform attributeName="transform" type="translate" values="0,0;0,-5;0,0" dur="0.45s" repeatCount="indefinite"/>
+        </rect>
+        <rect x="70" y="58" width="9" height="16" rx="4">
+          <animateTransform attributeName="transform" type="translate" values="0,0;0,-5;0,0" dur="0.45s" begin="0.225s" repeatCount="indefinite"/>
+        </rect>
+      </g>
+
+      <ellipse cx="60" cy="48" rx="38" ry="21" fill="#e0ae52"/>
+
+      <g fill="#5c1830">
+        <rect x="52" y="60" width="9" height="16" rx="4">
+          <animateTransform attributeName="transform" type="translate" values="0,0;0,-5;0,0" dur="0.45s" begin="0.225s" repeatCount="indefinite"/>
+        </rect>
+        <rect x="88" y="60" width="9" height="16" rx="4">
+          <animateTransform attributeName="transform" type="translate" values="0,0;0,-5;0,0" dur="0.45s" repeatCount="indefinite"/>
+        </rect>
+      </g>
+
+      <circle cx="100" cy="30" r="17" fill="#e0ae52"/>
+      <polygon points="86,20 92,2 99,19" fill="#e0ae52"/>
+      <polygon points="101,17 109,1 116,18" fill="#e0ae52"/>
+      <polygon points="88,17 92,7 96,17" fill="#5c1830"/>
+      <polygon points="104,15 109,5 113,16" fill="#5c1830"/>
+      <circle cx="107" cy="28" r="2.2" fill="#2c1b1f"/>
+      <polygon points="113,34 117,34 115,37" fill="#b1273f"/>
+    </g>
+  </g>
+</svg>

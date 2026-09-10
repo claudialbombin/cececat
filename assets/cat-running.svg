@@ -1,0 +1,45 @@
+<svg width="100%" height="70" viewBox="0 0 800 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Un gato correteando de derecha a izquierda">
+  <g>
+    <animateTransform attributeName="transform" type="translate" from="860,0" to="-160,0" dur="5s" repeatCount="indefinite"/>
+    <circle cx="0" cy="45" r="7" fill="#b1273f">
+      <animateTransform attributeName="transform" type="translate" values="0,0;0,-7;0,0" dur="0.4s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <g>
+    <animateTransform attributeName="transform" type="translate" from="900,0" to="-200,0" dur="5s" repeatCount="indefinite"/>
+    <g transform="scale(-1,1)">
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="0,0;0,-5;0,0;0,-5;0,0" keyTimes="0;0.25;0.5;0.75;1" dur="0.35s" repeatCount="indefinite"/>
+
+        <path d="M18,50 Q-9,30 1,9" fill="none" stroke="#bd8a2e" stroke-width="6" stroke-linecap="round">
+          <animateTransform attributeName="transform" type="rotate" values="0 18 50;16 18 50;0 18 50;-16 18 50;0 18 50" dur="0.35s" repeatCount="indefinite"/>
+        </path>
+
+        <g fill="#5c1830">
+          <rect x="35" y="52" width="8" height="14" rx="4">
+            <animateTransform attributeName="transform" type="translate" values="0,0;0,-6;0,0" dur="0.3s" repeatCount="indefinite"/>
+          </rect>
+          <rect x="48" y="54" width="8" height="14" rx="4">
+            <animateTransform attributeName="transform" type="translate" values="0,0;0,-6;0,0" dur="0.3s" begin="0.15s" repeatCount="indefinite"/>
+          </rect>
+          <rect x="65" y="52" width="8" height="14" rx="4">
+            <animateTransform attributeName="transform" type="translate" values="0,0;0,-6;0,0" dur="0.3s" begin="0.15s" repeatCount="indefinite"/>
+          </rect>
+          <rect x="82" y="54" width="8" height="14" rx="4">
+            <animateTransform attributeName="transform" type="translate" values="0,0;0,-6;0,0" dur="0.3s" repeatCount="indefinite"/>
+          </rect>
+        </g>
+
+        <ellipse cx="55" cy="42" rx="34" ry="18" fill="#e0ae52"/>
+        <circle cx="92" cy="26" r="15" fill="#e0ae52"/>
+        <polygon points="79,17 85,1 91,16" fill="#e0ae52"/>
+        <polygon points="93,14 100,0 106,15" fill="#e0ae52"/>
+        <polygon points="81,15 85,6 88,15" fill="#5c1830"/>
+        <polygon points="95,12 99,3 103,13" fill="#5c1830"/>
+        <circle cx="98" cy="24" r="2" fill="#2c1b1f"/>
+        <polygon points="104,29 108,29 106,32" fill="#b1273f"/>
+      </g>
+    </g>
+  </g>
+</svg>
