@@ -10,11 +10,14 @@
 
 ![Un solo archivo](https://img.shields.io/badge/Un%20solo%20archivo-index.html-bd8a2e?style=for-the-badge)
 ![Sin backend](https://img.shields.io/badge/Backend-cero-5c1830?style=for-the-badge)
-![GitHub Pages](https://img.shields.io/badge/Hosting-GitHub%20Pages-222222?style=for-the-badge&logo=github)
 ![Firebase](https://img.shields.io/badge/Puntuaciones%20en%20vivo-Firestore-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
 ![EmailJS](https://img.shields.io/badge/Enlaces%20por%20email-EmailJS-1f8a4c?style=for-the-badge&logo=maildotru&logoColor=white)
 ![Vanilla JS](https://img.shields.io/badge/JavaScript-vanilla-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
 ![Offline PDF](https://img.shields.io/badge/Lectura%20de%20PDF-offline-b1273f?style=for-the-badge)
+
+<br/><br/>
+
+<img src="assets/cat-crossing.svg" width="100%" height="90" alt="Un gatito cruzando"/>
 
 </div>
 
@@ -22,13 +25,13 @@
 
 CeceCat es un gestor de torneos de debate por parejas: crea el torneo con un asistente guiado, genera los emparejamientos de cada ronda, reparte los jueces entre las salas, recoge las puntuaciones (a mano o en vivo desde el móvil de cada juez) y lleva la clasificación — todo desde una única página web.
 
-No hay servidor propio, no hay base de datos que mantener, no hay instalación. `index.html` es **un solo archivo**: todo el algoritmo de emparejamientos, la asignación de jueces, el cálculo de puntos y la clasificación corren enteros en el navegador de quien lo abra. Eso significa que se puede alojar gratis en GitHub Pages y que sigue funcionando sin conexión salvo por dos piezas opcionales — el envío de puntuaciones en vivo y el email a los jueces — que si no se configuran, simplemente no se activan y todo lo demás sigue igual.
+No hay servidor propio, no hay base de datos que mantener, no hay instalación. `index.html` es **un solo archivo**: todo el algoritmo de emparejamientos, la asignación de jueces, el cálculo de puntos y la clasificación corren enteros en el navegador de quien lo abra, y sigue funcionando sin conexión salvo por dos piezas opcionales — el envío de puntuaciones en vivo y el email a los jueces — que si no se configuran, simplemente no se activan y todo lo demás sigue igual.
 
 <div align="center">
 
 ### 🧭 Tabla de contenidos
 
-[Cómo se organiza un torneo](#-cómo-se-organiza-un-torneo) · [El asistente guiado](#-el-asistente-guiado) · [Draw, ronda y clasificación](#-draw-ronda-actual-y-clasificación) · [Jueces que rotan de verdad](#-jueces-reparto-automático-que-rota-de-verdad) · [Puntuaciones en vivo](#-puntuaciones-en-vivo-desde-el-móvil-de-cada-juez) · [Copias de seguridad](#-copias-de-seguridad-tres-capas) · [Publicarlo en GitHub Pages](#-publicarlo-en-github-pages) · [Configurar Firestore + EmailJS](#-configurar-el-envío-de-puntuaciones) · [Durante el torneo](#-durante-el-torneo)
+[Cómo se organiza un torneo](#-cómo-se-organiza-un-torneo) · [El asistente guiado](#-el-asistente-guiado) · [Draw, ronda y clasificación](#-draw-ronda-actual-y-clasificación) · [Jueces que rotan de verdad](#-jueces-reparto-automático-que-rota-de-verdad) · [Puntuaciones en vivo](#-puntuaciones-en-vivo-desde-el-móvil-de-cada-juez) · [Copias de seguridad](#-copias-de-seguridad-tres-capas) · [Configurar Firestore + EmailJS](#-configurar-el-envío-de-puntuaciones) · [Durante el torneo](#-durante-el-torneo)
 
 </div>
 
@@ -198,38 +201,17 @@ Al crear el torneo, se puede elegir una carpeta del ordenador (se abre directame
 
 > La copia en disco usa la *File System Access API*, así que solo funciona en navegadores basados en Chromium (Chrome, Edge). En el resto, esa opción simplemente no aparece y las otras dos capas siguen funcionando igual.
 
+<div align="center">
+<img src="assets/cat-jumping.svg" width="140" alt="Un gato saltando"/>
+</div>
+
 <img src="https://capsule-render.vercel.app/api?type=rect&color=0:bd8a2e,100:5c1830&height=3&section=header" width="100%"/>
-
-## 🚀 Publicarlo en GitHub Pages
-
-1. Crea un repositorio nuevo en GitHub (puede llamarse `cececat` o como prefieras). Puede ser público o privado — si es privado, GitHub Pages necesita un plan que lo permita; si no estás segura, hazlo público, no hay datos sensibles en el código, solo el propio programa.
-2. Sube `index.html` a la raíz del repositorio (arrastrándolo en la web de GitHub, o con `git`):
-
-   ```bash
-   cd cececat
-   git init
-   git add index.html README.md
-   git commit -m "CeceCat: primera versión"
-   git branch -M main
-   git remote add origin https://github.com/TU_USUARIO/cececat.git
-   git push -u origin main
-   ```
-
-3. En GitHub, ve a **Settings → Pages**.
-4. En "Build and deployment", elige **Deploy from a branch**, rama `main`, carpeta `/ (root)`. Guarda.
-5. En un par de minutos la página estará disponible en:
-
-   ```
-   https://TU_USUARIO.github.io/cececat/
-   ```
-
-6. Comparte ese enlace con quien vaya a llevar la mesa central. Puede usarlo directamente desde el navegador, sin instalar nada.
 
 ## 🔥 Configurar el envío de puntuaciones
 
 <img src="https://capsule-render.vercel.app/api?type=soft&color=fbf3e6&height=2&section=header" width="100%"/>
 
-Hace falta un proyecto de **Firebase** (Firestore, plan gratuito Spark) y una cuenta de **EmailJS** (plan gratuito, 200 emails/mes). Si ya están configurados dentro de `index.html`, este paso está hecho — en cuanto se publique en GitHub Pages, cada juez que se añada recibe su enlace automáticamente.
+Hace falta un proyecto de **Firebase** (Firestore, plan gratuito Spark) y una cuenta de **EmailJS** (plan gratuito, 200 emails/mes). Si ya están configurados dentro de `index.html`, este paso está hecho — en cuanto esté publicado en algún sitio accesible, cada juez que se añada recibe su enlace automáticamente.
 
 <details>
 <summary><b>☁️ Firestore — reglas</b></summary>
@@ -292,6 +274,8 @@ En EmailJS, crea una cuenta gratuita en [emailjs.com](https://www.emailjs.com), 
 <div align="center">
 
 <br/>
+
+<img src="assets/cat-running.svg" width="100%" height="70" alt="Un gato correteando"/>
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:bd8a2e,100:5c1830&height=140&section=footer&animation=fadeIn" width="100%"/>
 
