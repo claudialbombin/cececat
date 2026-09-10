@@ -905,6 +905,13 @@ function roomLabel(index){
   return (custom && custom.trim()) ? custom.trim() : ('Sala ' + (index + 1));
 }
 
+function compareTuples(a, b){
+  for (let i = 0; i < a.length; i++){
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return 0;
+}
+
 function assignJudgesToRooms(roomsCount, idGroups){
   const assignments = Array.from({ length: roomsCount }, () => []);
   const judgeIds = Object.keys(state.judges || {}).map(Number);
@@ -912,6 +919,7 @@ function assignJudgesToRooms(roomsCount, idGroups){
   idGroups = idGroups || [];
 
   const pool = [...judgeIds];
+  const maxPerRoom = Math.ceil(judgeIds.length / roomsCount);
 
   // Penaliza repetir: (a) jueces que ya han evaluado a alguna de las parejas
   // de esta sala en rondas anteriores, y (b) jueces que ya han coincidido
@@ -929,33 +937,42 @@ function assignJudgesToRooms(roomsCount, idGroups){
     return repeatPairs + repeatCoJudges;
   };
 
-  // Primera pasada: un juez (candidato a principal) por sala.
-  for (let r = 0; r < roomsCount && pool.length; r++){
-    const order = [...pool].sort((a, b) => {
-      const ja = state.judges[a], jb = state.judges[b];
-      if (!!ja.isTrainee !== !!jb.isTrainee) return ja.isTrainee ? 1 : -1;
-      const ca = conflictScore(a, r), cb = conflictScore(b, r);
-      if (ca !== cb) return ca - cb;
-      return (ja.timesAssigned || 0) - (jb.timesAssigned || 0);
-    });
-    const chosen = order[0];
-    assignments[r].push(chosen);
-    pool.splice(pool.indexOf(chosen), 1);
+  // Primera pasada: un juez (candidato a principal, nunca en prácticas si
+  // hay alternativa) por sala. En cada paso se elige, entre TODAS las
+  // combinaciones (sala, juez) aún pendientes, la de menor conflicto —
+  // en vez de decidir sala por sala en orden fijo, que sesgaba siempre
+  // hacia la misma pareja de jueces.
+  const roomsNeedingChair = [];
+  for (let r = 0; r < roomsCount; r++) roomsNeedingChair.push(r);
+  while (roomsNeedingChair.length && pool.length){
+    let best = null;
+    for (const r of roomsNeedingChair){
+      for (const jid of pool){
+        const j = state.judges[jid];
+        const score = [j.isTrainee ? 1 : 0, conflictScore(jid, r), j.timesAssigned || 0];
+        if (!best || compareTuples(score, best.score) < 0) best = { r, jid, score };
+      }
+    }
+    assignments[best.r].push(best.jid);
+    pool.splice(pool.indexOf(best.jid), 1);
+    roomsNeedingChair.splice(roomsNeedingChair.indexOf(best.r), 1);
   }
 
-  // Resto de jueces (si hay más jueces que salas): reparto equilibrado,
-  // evitando también repetir parejas juzgadas y compañeros de mesa.
-  let r = 0;
+  // Resto de jueces (si hay más jueces que salas): igual, se elige en cada
+  // paso la mejor combinación (sala con hueco, juez) disponible, respetando
+  // un reparto equilibrado (ninguna sala pasa de maxPerRoom).
   while (pool.length){
-    const targetRoom = r % roomsCount;
-    pool.sort((a, b) => {
-      const ca = conflictScore(a, targetRoom), cb = conflictScore(b, targetRoom);
-      if (ca !== cb) return ca - cb;
-      return (state.judges[a].timesAssigned || 0) - (state.judges[b].timesAssigned || 0);
-    });
-    const chosen = pool.shift();
-    assignments[targetRoom].push(chosen);
-    r++;
+    let best = null;
+    for (let r = 0; r < roomsCount; r++){
+      if (assignments[r].length >= maxPerRoom) continue;
+      for (const jid of pool){
+        const score = [conflictScore(jid, r), state.judges[jid].timesAssigned || 0];
+        if (!best || compareTuples(score, best.score) < 0) best = { r, jid, score };
+      }
+    }
+    if (!best) break; // no debería ocurrir, pero evita un bucle infinito
+    assignments[best.r].push(best.jid);
+    pool.splice(pool.indexOf(best.jid), 1);
   }
   return assignments;
 }
@@ -1012,18 +1029,30 @@ function buildRooms(){
   return { rooms, byes };
 }
 
-function applyJudgeAssignments(rooms){
-  rooms.forEach(room => {
-    const judgeIdsInRoom = room.judges || [];
-    const pairIdsInRoom = Object.values(room.roles || {});
-    judgeIdsInRoom.forEach(jid => {
-      const j = state.judges[jid];
-      if (!j) return;
-      j.timesAssigned = (j.timesAssigned || 0) + 1;
-      j.judgedPairs = j.judgedPairs || [];
-      pairIdsInRoom.forEach(pid => { if (!j.judgedPairs.includes(pid)) j.judgedPairs.push(pid); });
-      j.judgedWith = j.judgedWith || [];
-      judgeIdsInRoom.forEach(ojid => { if (ojid !== jid && !j.judgedWith.includes(ojid)) j.judgedWith.push(ojid); });
+/* Recalcula desde cero (a partir de state.rounds, la fuente de verdad)
+   cuántas veces ha sido asignado cada juez, a qué parejas ha juzgado y
+   con qué otros jueces ha coincidido en sala. Se llama tras guardar
+   cada ronda y al cargar/importar un torneo, así que también repara
+   torneos guardados con una versión anterior de CeceCat que no llevaba
+   esta cuenta (o una copia de seguridad/.json importada de otro lado). */
+function recomputeJudgeStats(){
+  if (!state || !state.judges) return;
+  Object.values(state.judges).forEach(j => {
+    j.timesAssigned = 0;
+    j.judgedPairs = [];
+    j.judgedWith = [];
+  });
+  (state.rounds || []).forEach(r => {
+    (r.rooms || []).forEach(room => {
+      const judgeIdsInRoom = room.judges || [];
+      const pairIdsInRoom = Object.values(room.roles || {});
+      judgeIdsInRoom.forEach(jid => {
+        const j = state.judges[jid];
+        if (!j) return;
+        j.timesAssigned += 1;
+        pairIdsInRoom.forEach(pid => { if (!j.judgedPairs.includes(pid)) j.judgedPairs.push(pid); });
+        judgeIdsInRoom.forEach(ojid => { if (ojid !== jid && !j.judgedWith.includes(ojid)) j.judgedWith.push(ojid); });
+      });
     });
   });
 }
@@ -1874,7 +1903,6 @@ function saveRoundResults(){
   }
 
   results.forEach(r => applyRoomResult(r, state.currentRound));
-  applyJudgeAssignments(results);
 
   state.rounds.push({
     round_number: state.currentRound,
@@ -1884,6 +1912,7 @@ function saveRoundResults(){
     byes: byes,
     timestamp: new Date().toISOString()
   });
+  recomputeJudgeStats();
 
   state.started = true;
   state.currentRound += 1;
@@ -2432,6 +2461,7 @@ function handleImportFile(file, onDone){
       if (!parsed.nextJudgeId) parsed.nextJudgeId = Object.keys(parsed.judges).length + 1;
       ensureJudgeAndTournamentTokens(parsed);
       state = parsed;
+      recomputeJudgeStats();
       saveState();
       showToast('Torneo cargado correctamente.');
       onDone();
@@ -2683,6 +2713,8 @@ async function initJudgeMode(token){
     if (!saved.scoreCategories || !saved.scoreCategories.length) saved.scoreCategories = ['Puntos'];
     ensureJudgeAndTournamentTokens(saved);
     state = saved;
+    recomputeJudgeStats();
+    saveState();
     renderAll();
     tryRestoreAutosave();
   } else {
