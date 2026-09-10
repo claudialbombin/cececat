@@ -137,6 +137,12 @@
   }
   .pairing .slot .pname{ font-weight:600; flex:1; min-width:120px; }
   .pairing .slot input{ width:120px; margin-bottom:0; flex-shrink:0; }
+  .pairing .slot.multi{ align-items:flex-start; }
+  .scoreFields{ display:flex; gap:8px; flex-wrap:wrap; }
+  .scoreField{ display:flex; flex-direction:column; gap:2px; }
+  .scoreField label{ font-size:10px; color:var(--text-soft); font-weight:700; text-transform:uppercase; white-space:nowrap; }
+  .scoreField input{ width:76px; margin-bottom:0; }
+  .scoreSum{ flex-shrink:0; margin-top:4px; }
   .badge{ display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:700; background:#f3e6d3; color:var(--navy); }
   .badge.win{ background:#e4f6ea; color:var(--green); }
   .empty{ color:var(--text-soft); font-size:14px; padding:8px 0; }
@@ -209,6 +215,7 @@
     header{padding:16px;}
     main{padding:16px 12px 70px;}
     .pairing .slot input{ width:90px; }
+    .scoreField input{ width:64px; }
   }
 </style>
 </head>
@@ -285,6 +292,23 @@
         </label>
       </div>
       <div class="hint" id="formatHint"></div>
+
+      <!-- Sub-panel: apartados de puntuación (solo académico) -->
+      <div class="subpanel" id="academicCategoriesPanel">
+        <label for="categoryInput">Apartados de puntuación (p.ej. Contenido, Estilo, Estrategia)</label>
+        <div class="row">
+          <div style="flex:3;">
+            <input type="text" id="categoryInput" placeholder="p.ej. Contenido">
+          </div>
+          <div style="flex:1; min-width:auto;">
+            <button class="btn ghost" id="btnAddCategory" type="button" style="width:100%;">Añadir</button>
+          </div>
+        </div>
+        <span class="count-chip" id="categoryCount">0 apartados añadidos</span>
+        <div class="oneByOneList" id="categoryList"></div>
+        <p class="hint">Los puntos de cada apartado se suman solos para dar el total de cada pareja, y gana quien más sume (sin empates). Puedes editar estos apartados más tarde desde la pestaña Datos.</p>
+      </div>
+
       <div class="footer-actions">
         <button class="btn ghost" id="wizBack2">Atrás</button>
         <button class="btn gold" id="wizNext2">Siguiente</button>
@@ -520,6 +544,21 @@
       <h2>Resumen del torneo</h2>
       <div id="summaryBody"></div>
     </div>
+    <div class="card" id="scoreCategoriesCard" style="display:none;">
+      <h2>Apartados de puntuación</h2>
+      <p class="hint">Los apartados que se usan en "Ronda actual" para puntuar cada pareja; sus puntos se suman para dar el total y gana quien más sume. Los cambios se guardan al momento y solo afectan a las rondas que aún no hayas guardado — las ya jugadas conservan su propio desglose.</p>
+      <label for="dataCategoryInput">Nombre del apartado</label>
+      <div class="row">
+        <div style="flex:3;">
+          <input type="text" id="dataCategoryInput" placeholder="p.ej. Contenido">
+        </div>
+        <div style="flex:1; min-width:auto;">
+          <button class="btn ghost" id="btnAddDataCategory" type="button" style="width:100%;">Añadir</button>
+        </div>
+      </div>
+      <span class="count-chip" id="dataCategoryCount">0 apartados</span>
+      <div class="oneByOneList" id="dataCategoryList"></div>
+    </div>
     <div class="card">
       <h2 style="color:var(--red);">Zona de peligro</h2>
       <p class="hint">Esto borra el torneo actual de este navegador. Descarga primero una copia de seguridad si quieres conservarlo.</p>
@@ -599,23 +638,25 @@ const FORMATS = {
 };
 
 /* ---------- Envío remoto de jueces (Firebase, opcional) ----------
-   Por defecto CeceCat funciona 100% sin conexión y sin nada de esto: cada
-   resultado se mete a mano en "Ronda actual", como siempre.
-   Para que además cada juez pueda enviar sus puntos desde el móvil:
-     1. Crea un proyecto gratis en https://console.firebase.google.com
-     2. Dentro, activa "Firestore Database" (modo producción, cualquier región).
-     3. Configuración del proyecto → General → "Tus apps" → añade una app
-        web (icono </>) y copia el objeto de configuración que te da aquí abajo.
-     4. En Firestore → Reglas, pega las reglas del README y publícalas.
-   Si dejas FIREBASE_CONFIG.apiKey tal cual ("TU_API_KEY"), esta sección no
-   hace nada y el resto de CeceCat funciona exactamente igual que siempre. */
+   Ya está configurado con tu proyecto Firebase "CeceCat" (cececat-d3ae2):
+   Firestore está activado (Standard edition, eur3) y las reglas de
+   seguridad de abajo ya están publicadas — el envío de puntuaciones por
+   parte de los jueces funciona en cuanto publiques este archivo.
+   Si alguna vez quieres desactivarlo, basta con volver a poner
+   apiKey: "TU_API_KEY" aquí abajo; el resto de CeceCat sigue funcionando
+   exactamente igual (todo a mano) sin nada de esto.
+   Para usar tu propio proyecto en vez de este: crea uno gratis en
+   https://console.firebase.google.com, activa Firestore Database (modo
+   producción), en Configuración del proyecto → General → "Tus apps" añade
+   una app web (icono </>) y copia aquí su configuración, y en Firestore →
+   Reglas pega y publica las reglas que están en el README. */
 const FIREBASE_CONFIG = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_PROYECTO.firebaseapp.com",
-  projectId: "TU_PROYECTO",
-  storageBucket: "TU_PROYECTO.appspot.com",
-  messagingSenderId: "000000000000",
-  appId: "1:000000000000:web:xxxxxxxxxxxxxxxxxxxx"
+  apiKey: "AIzaSyDDDckCQMu55AgABdWG0rmJ8A5WlNQickk",
+  authDomain: "cececat-d3ae2.firebaseapp.com",
+  projectId: "cececat-d3ae2",
+  storageBucket: "cececat-d3ae2.firebasestorage.app",
+  messagingSenderId: "740791105662",
+  appId: "1:740791105662:web:02d745aea9a8e92338802f"
 };
 const ROOMS_COLLECTION = "cececat_rooms";
 let db = null;
@@ -649,7 +690,7 @@ let state = null;
 
 /* ---------- Modelo de datos ---------- */
 
-function newState(name, formatKey, numPairs, pairNames, swingCount, roomNames, judgesList){
+function newState(name, formatKey, numPairs, pairNames, swingCount, roomNames, judgesList, scoreCategories){
   swingCount = swingCount || 0;
   const fmt = FORMATS[formatKey];
   const pairs = {};
@@ -676,6 +717,10 @@ function newState(name, formatKey, numPairs, pairNames, swingCount, roomNames, j
     nextJudgeId++;
   });
 
+  const cleanCategories = formatKey === 'academic'
+    ? (scoreCategories || []).map(c => (c || '').trim()).filter(Boolean)
+    : [];
+
   return {
     tournamentName: name || "Torneo de debate",
     format: formatKey,
@@ -684,11 +729,24 @@ function newState(name, formatKey, numPairs, pairNames, swingCount, roomNames, j
     roomNames: (roomNames || []).filter(r => r && r.trim()),
     judges: judges,
     nextJudgeId: nextJudgeId,
+    scoreCategories: cleanCategories.length ? cleanCategories : ['Puntos'],
     rounds: [],
     currentRound: 1,
     started: false,
     pendingPairings: null
   };
+}
+
+/* ---------- Apartados de puntuación (académico) / oradores (BP) ---------- */
+
+function scoreFieldsFor(){
+  const F = fmt();
+  if (F.roomSize === 4){
+    // BP: dos oradores por pareja, cada uno entre 50 y 100
+    return { labels: ['Orador 1', 'Orador 2'], min: 50, max: 100 };
+  }
+  const cats = (state.scoreCategories && state.scoreCategories.length) ? state.scoreCategories : ['Puntos'];
+  return { labels: cats, min: 0, max: null };
 }
 
 function computeSwingInfo(realCount, formatKey){
@@ -847,7 +905,7 @@ function applyRoomResult(result, roundNum){
     const role = roleOfId[id];
     P.positions[role] = (P.positions[role] || 0) + 1;
     allIds.filter(x => x !== id).forEach(o => { if (!P.history.includes(o)) P.history.push(o); });
-    P.debates.push({ round: roundNum, role, points: result.points[id], rank: idx+1, opponents: allIds.filter(x=>x!==id) });
+    P.debates.push({ round: roundNum, role, points: result.points[id], breakdown: (result.breakdown ? result.breakdown[id] : undefined), rank: idx+1, opponents: allIds.filter(x=>x!==id) });
   });
 }
 
@@ -904,6 +962,7 @@ let wizSwingsNeeded = 0;
 let wizRoomsNeeded = 0;
 let wizRoomNames = [];
 let wizJudges = [];
+let wizScoreCategories = ['Contenido', 'Estilo', 'Estrategia'];
 
 function goToStep(n){
   wizStep = n;
@@ -924,7 +983,13 @@ document.getElementById('wizNext1').addEventListener('click', () => goToStep(2))
 document.getElementById('wizName').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); goToStep(2); } });
 
 document.getElementById('wizBack2').addEventListener('click', () => goToStep(1));
-document.getElementById('wizNext2').addEventListener('click', () => goToStep(3));
+document.getElementById('wizNext2').addEventListener('click', () => {
+  if (setupFormat === 'academic' && wizScoreCategories.length === 0){
+    showToast('Añade al menos un apartado de puntuación antes de continuar.');
+    return;
+  }
+  goToStep(3);
+});
 
 document.getElementById('wizBack3').addEventListener('click', () => goToStep(2));
 document.getElementById('wizNext3').addEventListener('click', () => {
@@ -967,10 +1032,41 @@ document.querySelectorAll('#modeSegmented .option').forEach(label => {
 function updateFormatHints(){
   const isBp = setupFormat === 'bp';
   document.getElementById('formatHint').textContent = isBp
-    ? 'Cada sala enfrenta a 4 parejas en las posiciones OG, OO, CG y CO, con ranking 1º–4º.'
-    : 'Cada sala enfrenta a 2 parejas, una a favor y otra en contra.';
+    ? 'Cada sala enfrenta a 4 parejas en las posiciones OG, OO, CG y CO. Cada orador recibe una puntuación entre 50 y 100; se suman los dos oradores de cada pareja y esa suma marca el ranking 1º–4º.'
+    : 'Cada sala enfrenta a 2 parejas, una a favor y otra en contra. Se puntúa por apartados (los que añadas abajo) y gana quien sume más puntos entre todos los apartados.';
+  document.getElementById('academicCategoriesPanel').style.display = isBp ? 'none' : 'block';
 }
 updateFormatHints();
+
+/* -- apartados de puntuación (paso 2, solo académico) -- */
+function renderWizCategoryList(){
+  const list = document.getElementById('categoryList');
+  list.innerHTML = wizScoreCategories.map((n, i) => `
+    <div class="item">
+      <span>#${i+1} — ${escapeHtml(n)}</span>
+      <button type="button" data-i="${i}" class="removeWizCategory">Quitar</button>
+    </div>`).join('');
+  document.getElementById('categoryCount').textContent = `${wizScoreCategories.length} apartado${wizScoreCategories.length===1?'':'s'} añadido${wizScoreCategories.length===1?'':'s'}`;
+  list.querySelectorAll('.removeWizCategory').forEach(btn => {
+    btn.addEventListener('click', () => { wizScoreCategories.splice(parseInt(btn.dataset.i,10),1); renderWizCategoryList(); });
+  });
+}
+function addWizCategory(){
+  const input = document.getElementById('categoryInput');
+  const val = input.value.trim();
+  if (!val) return;
+  if (wizScoreCategories.some(c => c.toLowerCase() === val.toLowerCase())){
+    showToast('Ese apartado ya está en la lista.');
+    return;
+  }
+  wizScoreCategories.push(val);
+  input.value = '';
+  input.focus();
+  renderWizCategoryList();
+}
+document.getElementById('btnAddCategory').addEventListener('click', addWizCategory);
+document.getElementById('categoryInput').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); addWizCategory(); } });
+renderWizCategoryList();
 
 function swingText(n){
   const { swingsNeeded, total } = computeSwingInfo(n, setupFormat);
@@ -1182,7 +1278,7 @@ document.getElementById('wizNext4').addEventListener('click', () => {
 
 document.getElementById('btnCreateTournament').addEventListener('click', () => {
   const name = document.getElementById('wizName').value.trim() || 'Torneo de debate';
-  state = newState(name, setupFormat, wizTotalPairs, wizFinalNames, wizSwingsNeeded, wizRoomNames, wizJudges);
+  state = newState(name, setupFormat, wizTotalPairs, wizFinalNames, wizSwingsNeeded, wizRoomNames, wizJudges, wizScoreCategories);
   saveState();
   if (wizSwingsNeeded > 0){
     showToast(`Torneo creado con ${wizSwingsNeeded} pareja${wizSwingsNeeded>1?'s':''} Swing de relleno.`);
@@ -1236,10 +1332,14 @@ function attachRoomListeners(){
       saveState();
       const F2 = fmt();
       F2.roles.forEach(role => {
-        const input = document.querySelector(`.ptsInput[data-room="${ri}"][data-role="${role}"]`);
-        if (input && !input.value && data.points[role] !== undefined && data.points[role] !== null){
-          input.value = data.points[role];
-        }
+        const vals = data.points[role];
+        if (vals === undefined || vals === null) return;
+        const arr = Array.isArray(vals) ? vals : [vals];
+        arr.forEach((v, fi) => {
+          const input = document.querySelector(`.ptsInput[data-room="${ri}"][data-role="${role}"][data-field="${fi}"]`);
+          if (input && !input.value && v !== undefined && v !== null) input.value = v;
+        });
+        updateScoreSum(ri, role);
       });
       const row = document.querySelector(`.pairing[data-room="${ri}"] .judge-link-row`);
       if (row) row.innerHTML = `<button class="btn ghost small" type="button" data-action="copyLink" data-room="${ri}">Copiar enlace del juez</button> <span class="badge win">✓ Recibido</span>`;
@@ -1248,6 +1348,25 @@ function attachRoomListeners(){
     window.__roomListeners.push(unsub);
   });
 }
+
+function updateScoreSum(ri, role){
+  const inputs = document.querySelectorAll(`.ptsInput[data-room="${ri}"][data-role="${role}"]`);
+  const sumEl = document.querySelector(`.scoreSum[data-room="${ri}"][data-role="${role}"]`);
+  if (!sumEl) return;
+  let sum = 0, allFilled = inputs.length > 0;
+  inputs.forEach(inp => {
+    const v = parseInt(inp.value, 10);
+    if (isNaN(v)) allFilled = false; else sum += v;
+  });
+  sumEl.textContent = allFilled ? `Total: ${sum}` : 'Total: —';
+}
+function updateAllScoreSums(){
+  document.querySelectorAll('.scoreFields').forEach(el => updateScoreSum(el.dataset.room, el.dataset.role));
+}
+document.getElementById('pairingsBody').addEventListener('input', (e) => {
+  if (!e.target.classList.contains('ptsInput')) return;
+  updateScoreSum(e.target.dataset.room, e.target.dataset.role);
+});
 
 function judgeLinkBlockHtml(room, ri){
   if (!firebaseReady) return '';
@@ -1299,13 +1418,20 @@ function renderRound(){
       html += `<div class="judge-line">Jueces: ${judgesCellHtml(room.judges)}</div>`;
     }
     html += judgeLinkBlockHtml(room, ri);
+    const SF = scoreFieldsFor();
     F.roles.forEach(role => {
       const id = room.roles[role];
+      const fieldsHtml = SF.labels.map((label, fi) => `
+        <div class="scoreField">
+          <label>${escapeHtml(label)}</label>
+          <input type="number" min="${SF.min}" ${SF.max != null ? `max="${SF.max}"` : ''} class="ptsInput" data-room="${ri}" data-role="${role}" data-field="${fi}" placeholder="${SF.max != null ? (SF.min + '–' + SF.max) : 'Puntos'}">
+        </div>`).join('');
       html += `
-      <div class="slot">
+      <div class="slot multi">
         <span class="role">${escapeHtml(F.roleShort[role])}</span>
         <span class="pname">${escapeHtml(state.pairs[id].name)}${swingBadge(id)}</span>
-        <input type="number" min="0" class="ptsInput" data-room="${ri}" data-role="${role}" placeholder="Puntos">
+        <div class="scoreFields" data-room="${ri}" data-role="${role}">${fieldsHtml}</div>
+        <span class="badge scoreSum" data-room="${ri}" data-role="${role}">Total: —</span>
       </div>`;
     });
     html += `</div>`;
@@ -1314,6 +1440,7 @@ function renderRound(){
     html += `<p class="empty">No hay suficientes parejas para formar una sala.</p>`;
   }
   body.innerHTML = html;
+  updateAllScoreSums();
 
   const saveBtn = document.createElement('button');
   saveBtn.className = 'btn gold';
@@ -1347,6 +1474,7 @@ document.getElementById('pairingsBody').addEventListener('click', async (e) => {
     try{
       const token = genToken();
       const F2 = fmt();
+      const SF2 = scoreFieldsFor();
       const roles = {};
       F2.roles.forEach(role => {
         const id = room.roles[role];
@@ -1359,6 +1487,9 @@ document.getElementById('pairingsBody').addEventListener('click', async (e) => {
         roundNumber: state.currentRound,
         label: room.label,
         roles: roles,
+        scoreLabels: SF2.labels,
+        scoreMin: SF2.min,
+        scoreMax: SF2.max,
         status: 'pending',
         points: null,
         createdAt: Date.now()
@@ -1382,21 +1513,30 @@ document.getElementById('pairingsBody').addEventListener('click', async (e) => {
 
 function saveRoundResults(){
   const F = fmt();
+  const SF = scoreFieldsFor();
   const { rooms, byes } = state.pendingPairings;
   const results = [];
 
   for (let ri=0; ri<rooms.length; ri++){
     const room = rooms[ri];
     const points = {};
+    const breakdown = {};
     for (const role of F.roles){
       const id = room.roles[role];
-      const input = document.querySelector(`.ptsInput[data-room="${ri}"][data-role="${role}"]`);
-      const val = parseInt(input.value, 10);
-      if (isNaN(val) || val < 0){
-        showToast(`Rellena todos los puntos de la Sala ${ri+1} con números válidos (≥ 0).`);
-        return;
+      const vals = [];
+      for (let fi=0; fi<SF.labels.length; fi++){
+        const input = document.querySelector(`.ptsInput[data-room="${ri}"][data-role="${role}"][data-field="${fi}"]`);
+        const val = parseInt(input.value, 10);
+        const outOfRange = isNaN(val) || val < SF.min || (SF.max != null && val > SF.max);
+        if (outOfRange){
+          const rangeText = SF.max != null ? `entre ${SF.min} y ${SF.max}` : `un número válido (mínimo ${SF.min})`;
+          showToast(`Rellena "${SF.labels[fi]}" de la Sala ${ri+1} con ${rangeText}.`);
+          return;
+        }
+        vals.push(val);
       }
-      points[id] = val;
+      points[id] = vals.reduce((a,b) => a+b, 0);
+      breakdown[id] = vals;
     }
     const distinctVals = new Set(Object.values(points));
     if (distinctVals.size !== F.roomSize){
@@ -1404,7 +1544,7 @@ function saveRoundResults(){
       return;
     }
     const ranking = Object.keys(room.roles).map(role => room.roles[role]).sort((a,b) => points[b] - points[a]);
-    results.push({ roles: room.roles, points, ranking, judges: room.judges || [], label: room.label });
+    results.push({ roles: room.roles, points, breakdown, ranking, judges: room.judges || [], label: room.label });
   }
 
   results.forEach(r => applyRoomResult(r, state.currentRound));
@@ -1413,6 +1553,7 @@ function saveRoundResults(){
   state.rounds.push({
     round_number: state.currentRound,
     format: state.format,
+    scoreLabels: SF.labels,
     rooms: results,
     byes: byes,
     timestamp: new Date().toISOString()
@@ -1541,20 +1682,27 @@ function renderHistory(){
     html += `<details class="round-block" ${r.round_number === state.rounds.length ? 'open' : ''}>
       <summary>Ronda ${r.round_number}${byeText}</summary>
       <div class="content">`;
+    const rLabels = (r.scoreLabels && r.scoreLabels.length) ? r.scoreLabels : ['Puntos'];
+    const showBreakdown = rLabels.length > 1;
     r.rooms.forEach((room, ri) => {
       const judgesLine = (room.judges && room.judges.length) ? `<div class="judge-line" style="margin-top:0;">Jueces: ${judgesCellHtml(room.judges)}</div>` : '';
       html += `<div class="roomlabel">${escapeHtml(room.label || ('Sala ' + (ri+1)))}</div>
         ${judgesLine}
         <table>
-          <thead><tr><th>Rol</th><th>Pareja</th><th>Puntos</th><th>Puesto</th></tr></thead>
+          <thead><tr><th>Rol</th><th>Pareja</th>${showBreakdown ? `<th>${rLabels.map(escapeHtml).join(' + ')}</th>` : ''}<th>Total</th><th>Puesto</th></tr></thead>
           <tbody>
             ${F.roles.map(role => {
               const id = room.roles[role];
               const rank = room.ranking.indexOf(id) + 1;
               const name = state.pairs[id]?.name || ('Pareja ' + id);
+              const bd = room.breakdown ? room.breakdown[id] : null;
+              const bdCell = showBreakdown
+                ? `<td>${bd ? bd.map((v,i) => `${escapeHtml(rLabels[i] || '')}: ${v}`).join(' · ') : '—'}</td>`
+                : '';
               return `<tr>
                 <td>${escapeHtml(F.roleShort[role])}</td>
                 <td>${escapeHtml(name)}${swingBadge(id)}</td>
+                ${bdCell}
                 <td>${room.points[id]}</td>
                 <td>${rank === 1 ? '<span class="badge win">1º</span>' : rank + 'º'}</td>
               </tr>`;
@@ -1707,7 +1855,49 @@ function renderSummary(){
     <p><b>Ronda actual:</b> ${state.currentRound}</p>
     ${leaderHtml}
   `;
+  document.getElementById('scoreCategoriesCard').style.display = state.format === 'bp' ? 'none' : 'block';
+  if (state.format !== 'bp') renderDataCategoryList();
 }
+
+/* -- apartados de puntuación (pestaña Datos, edición posterior) -- */
+function renderDataCategoryList(){
+  const list = document.getElementById('dataCategoryList');
+  if (!state.scoreCategories || !state.scoreCategories.length) state.scoreCategories = ['Puntos'];
+  const cats = state.scoreCategories;
+  list.innerHTML = cats.map((n, i) => `
+    <div class="item">
+      <span>#${i+1} — ${escapeHtml(n)}</span>
+      <button type="button" data-i="${i}" class="removeDataCategory">Quitar</button>
+    </div>`).join('');
+  document.getElementById('dataCategoryCount').textContent = `${cats.length} apartado${cats.length===1?'':'s'}`;
+  list.querySelectorAll('.removeDataCategory').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (state.scoreCategories.length <= 1){
+        showToast('Tiene que quedar al menos un apartado.');
+        return;
+      }
+      state.scoreCategories.splice(parseInt(btn.dataset.i, 10), 1);
+      saveState();
+      renderDataCategoryList();
+    });
+  });
+}
+function addDataCategory(){
+  const input = document.getElementById('dataCategoryInput');
+  const val = input.value.trim();
+  if (!val) return;
+  if (state.scoreCategories.some(c => c.toLowerCase() === val.toLowerCase())){
+    showToast('Ese apartado ya está en la lista.');
+    return;
+  }
+  state.scoreCategories.push(val);
+  saveState();
+  input.value = '';
+  input.focus();
+  renderDataCategoryList();
+}
+document.getElementById('btnAddDataCategory').addEventListener('click', addDataCategory);
+document.getElementById('dataCategoryInput').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); addDataCategory(); } });
 
 /* ---------- Exportar / Importar ---------- */
 
@@ -1743,6 +1933,7 @@ function buildTxtReport(){
     out += '='.repeat(80) + '\n';
     out += 'RONDA ' + r.round_number + '\n';
     out += '='.repeat(80) + '\n\n';
+    const rLabels = (r.scoreLabels && r.scoreLabels.length) ? r.scoreLabels : ['Puntos'];
     r.rooms.forEach((room, ri) => {
       out += `${(room.label || ('SALA ' + (ri+1))).toUpperCase()}\n` + '-'.repeat(80) + '\n';
       RF.roles.forEach(role => {
@@ -1750,7 +1941,9 @@ function buildTxtReport(){
         const rank = room.ranking.indexOf(id) + 1;
         const p = state.pairs[id];
         const name = (p?.name || ('Pareja ' + id)) + swingSuffix(p);
-        out += `  [${RF.roleShort[role]}] ${name}: ${room.points[id]} puntos de ítem — puesto ${rank}º\n`;
+        const bd = room.breakdown ? room.breakdown[id] : null;
+        const bdText = (bd && rLabels.length > 1) ? ' (' + bd.map((v,i) => `${rLabels[i] || ''}: ${v}`).join(', ') + ')' : '';
+        out += `  [${RF.roleShort[role]}] ${name}: ${room.points[id]} puntos de ítem${bdText} — puesto ${rank}º\n`;
       });
       if (room.judges && room.judges.length){
         const jNames = room.judges.map((jid, idx) => {
@@ -1790,6 +1983,7 @@ function handleImportFile(file, onDone){
       const parsed = JSON.parse(e.target.result);
       if (!parsed.pairs || !parsed.tournamentName){ throw new Error('Formato no reconocido'); }
       if (!parsed.format) parsed.format = 'academic';
+      if (!parsed.scoreCategories || !parsed.scoreCategories.length) parsed.scoreCategories = ['Puntos'];
       if (!parsed.roomNames) parsed.roomNames = [];
       if (!parsed.judges) parsed.judges = {};
       if (!parsed.nextJudgeId) parsed.nextJudgeId = Object.keys(parsed.judges).length + 1;
@@ -1831,10 +2025,12 @@ document.getElementById('btnResetTournament').addEventListener('click', () => {
     wizRoomsNeeded = 0;
     wizRoomNames = [];
     wizJudges = [];
+    wizScoreCategories = ['Contenido', 'Estilo', 'Estrategia'];
     document.getElementById('importPreview').value = '';
     document.getElementById('importStatus').textContent = 'Aún no se ha cargado ningún archivo.';
     renderWizRoomList();
     renderWizJudgeList();
+    renderWizCategoryList();
     goToStep(1);
   }
 });
@@ -1843,6 +2039,9 @@ document.getElementById('btnResetTournament').addEventListener('click', () => {
 
 function renderJudgeForm(token, data){
   const F = FORMATS[data.format] || FORMATS.academic;
+  const labels = (data.scoreLabels && data.scoreLabels.length) ? data.scoreLabels : ['Puntos'];
+  const min = (data.scoreMin !== undefined && data.scoreMin !== null) ? data.scoreMin : 0;
+  const max = (data.scoreMax !== undefined) ? data.scoreMax : null;
   const body = document.getElementById('judgeBody');
   if (data.status === 'submitted'){
     body.innerHTML = `<h2>¡Gracias!</h2>
@@ -1850,39 +2049,57 @@ function renderJudgeForm(token, data){
       <p class="hint">Si te has equivocado al escribirlos, avisa a la mesa central para que lo corrija.</p>`;
     return;
   }
+  const introText = labels.length > 1
+    ? 'Introduce la puntuación de cada apartado para cada pareja. Se suman solas y no se permiten empates en el total.'
+    : (max != null
+        ? `Introduce la puntuación de cada orador (entre ${min} y ${max}). Se suman solas y no se permiten empates en el total.`
+        : 'Introduce los puntos de ítem que le has dado a cada pareja. No se permiten empates.');
   body.innerHTML = `
     <div class="step-eyebrow">${escapeHtml(data.tournamentName)} · Ronda ${data.roundNumber}</div>
     <h2>${escapeHtml(data.label)}</h2>
-    <p class="hint">Introduce los puntos de ítem que le has dado a cada pareja. No se permiten empates.</p>
+    <p class="hint">${introText}</p>
     <div class="pairing" style="border:none; padding:0; margin-bottom:0;">
     ${F.roles.map(role => {
       const r = data.roles[role] || {};
-      return `<div class="slot">
+      const fieldsHtml = labels.map((label, fi) => `
+        <div class="scoreField">
+          <label>${escapeHtml(label)}</label>
+          <input type="number" min="${min}" ${max != null ? `max="${max}"` : ''} class="judgePtsInput" data-role="${role}" data-field="${fi}" placeholder="${max != null ? (min + '–' + max) : 'Puntos'}">
+        </div>`).join('');
+      return `<div class="slot multi">
         <span class="role">${escapeHtml(F.roleShort[role])}</span>
         <span class="pname">${escapeHtml(r.name || '?')}${r.isSwing ? ' <span class="badge swing">Swing</span>' : ''}</span>
-        <input type="number" min="0" class="judgePtsInput" data-role="${role}" placeholder="Puntos">
+        <div class="scoreFields">${fieldsHtml}</div>
       </div>`;
     }).join('')}
     </div>
     <div class="footer-actions">
       <button class="btn gold" type="button" id="btnSubmitJudge">Enviar puntuación</button>
     </div>`;
-  document.getElementById('btnSubmitJudge').addEventListener('click', () => submitJudgeScores(token, data, F));
+  document.getElementById('btnSubmitJudge').addEventListener('click', () => submitJudgeScores(token, data, F, labels, min, max));
 }
 
-async function submitJudgeScores(token, data, F){
+async function submitJudgeScores(token, data, F, labels, min, max){
   const points = {};
   for (const role of F.roles){
-    const input = document.querySelector(`.judgePtsInput[data-role="${role}"]`);
-    const val = parseInt(input.value, 10);
-    if (isNaN(val) || val < 0){
-      showToast('Rellena todos los puntos con números válidos (≥ 0).');
-      return;
+    const vals = [];
+    for (let fi=0; fi<labels.length; fi++){
+      const input = document.querySelector(`.judgePtsInput[data-role="${role}"][data-field="${fi}"]`);
+      const val = parseInt(input.value, 10);
+      const bad = isNaN(val) || val < min || (max != null && val > max);
+      if (bad){
+        const rangeText = max != null ? `entre ${min} y ${max}` : `un número válido (mínimo ${min})`;
+        showToast(`Rellena "${labels[fi]}" de todas las parejas con ${rangeText}.`);
+        return;
+      }
+      vals.push(val);
     }
-    points[role] = val;
+    points[role] = vals;
   }
-  if (new Set(Object.values(points)).size !== F.roomSize){
-    showToast('No se permiten empates entre las parejas de la sala.');
+  const totals = {};
+  F.roles.forEach(role => { totals[role] = points[role].reduce((a,b) => a+b, 0); });
+  if (new Set(Object.values(totals)).size !== F.roomSize){
+    showToast('No se permiten empates en el total entre las parejas de la sala.');
     return;
   }
   const btn = document.getElementById('btnSubmitJudge');
@@ -1940,6 +2157,7 @@ async function initJudgeMode(token){
   }
   const saved = loadState();
   if (saved){
+    if (!saved.scoreCategories || !saved.scoreCategories.length) saved.scoreCategories = ['Puntos'];
     state = saved;
     renderAll();
   } else {
