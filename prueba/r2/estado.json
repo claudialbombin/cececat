@@ -1,0 +1,258 @@
+{
+  "tournamentName": "prueba",
+  "format": "academic",
+  "numPairs": 4,
+  "pairs": {
+    "1": {
+      "name": "Pareja 1",
+      "isSwing": false,
+      "wins": 0,
+      "item_points": 9,
+      "positions": {
+        "favor": 1,
+        "contra": 0
+      },
+      "history": [
+        2
+      ],
+      "debates": [
+        {
+          "round": 1,
+          "role": "favor",
+          "points": 9,
+          "breakdown": [
+            3,
+            3,
+            3
+          ],
+          "rank": 2,
+          "opponents": [
+            2
+          ]
+        }
+      ]
+    },
+    "2": {
+      "name": "Pareja 2",
+      "isSwing": false,
+      "wins": 1,
+      "item_points": 12,
+      "positions": {
+        "favor": 0,
+        "contra": 1
+      },
+      "history": [
+        1
+      ],
+      "debates": [
+        {
+          "round": 1,
+          "role": "contra",
+          "points": 12,
+          "breakdown": [
+            4,
+            4,
+            4
+          ],
+          "rank": 1,
+          "opponents": [
+            1
+          ]
+        }
+      ]
+    },
+    "3": {
+      "name": "Pareja 3",
+      "isSwing": false,
+      "wins": 0,
+      "item_points": 11,
+      "positions": {
+        "favor": 0,
+        "contra": 1
+      },
+      "history": [
+        4
+      ],
+      "debates": [
+        {
+          "round": 1,
+          "role": "contra",
+          "points": 11,
+          "breakdown": [
+            4,
+            1,
+            6
+          ],
+          "rank": 2,
+          "opponents": [
+            4
+          ]
+        }
+      ]
+    },
+    "4": {
+      "name": "Pareja 4",
+      "isSwing": false,
+      "wins": 1,
+      "item_points": 54,
+      "positions": {
+        "favor": 1,
+        "contra": 0
+      },
+      "history": [
+        3
+      ],
+      "debates": [
+        {
+          "round": 1,
+          "role": "favor",
+          "points": 54,
+          "breakdown": [
+            44,
+            4,
+            6
+          ],
+          "rank": 1,
+          "opponents": [
+            3
+          ]
+        }
+      ]
+    }
+  },
+  "roomNames": [],
+  "judges": {
+    "1": {
+      "name": "ce",
+      "isTrainee": true,
+      "email": "cecesplaces@gmail.com",
+      "judgeToken": "n05vehev4r34",
+      "timesAssigned": 1
+    },
+    "2": {
+      "name": "clau",
+      "isTrainee": false,
+      "email": "cecesworkplace@gmail.com",
+      "judgeToken": "89j3r9iuzr8d",
+      "timesAssigned": 1
+    },
+    "3": {
+      "name": "claudia",
+      "isTrainee": false,
+      "email": "claudialbombin@gmail.com",
+      "judgeToken": "jalyk8z5soe9",
+      "timesAssigned": 1
+    }
+  },
+  "nextJudgeId": 4,
+  "scoreCategories": [
+    "Contenido",
+    "Estilo",
+    "Estrategia"
+  ],
+  "firebaseTournamentToken": "cqr8zwve90w2",
+  "rounds": [
+    {
+      "round_number": 1,
+      "format": "academic",
+      "scoreLabels": [
+        "Contenido",
+        "Estilo",
+        "Estrategia"
+      ],
+      "rooms": [
+        {
+          "roles": {
+            "contra": 2,
+            "favor": 1
+          },
+          "points": {
+            "1": 9,
+            "2": 12
+          },
+          "breakdown": {
+            "1": [
+              3,
+              3,
+              3
+            ],
+            "2": [
+              4,
+              4,
+              4
+            ]
+          },
+          "ranking": [
+            2,
+            1
+          ],
+          "judges": [
+            2,
+            1
+          ],
+          "label": "Sala 1"
+        },
+        {
+          "roles": {
+            "favor": 4,
+            "contra": 3
+          },
+          "points": {
+            "3": 11,
+            "4": 54
+          },
+          "breakdown": {
+            "3": [
+              4,
+              1,
+              6
+            ],
+            "4": [
+              44,
+              4,
+              6
+            ]
+          },
+          "ranking": [
+            4,
+            3
+          ],
+          "judges": [
+            3
+          ],
+          "label": "Sala 2"
+        }
+      ],
+      "byes": [],
+      "timestamp": "2026-09-10T15:12:27.037Z"
+    }
+  ],
+  "currentRound": 2,
+  "started": true,
+  "pendingPairings": {
+    "rooms": [
+      {
+        "roles": {
+          "contra": 4,
+          "favor": 2
+        },
+        "judges": [
+          2,
+          1
+        ],
+        "label": "Sala 1"
+      },
+      {
+        "roles": {
+          "contra": 1,
+          "favor": 3
+        },
+        "judges": [
+          3
+        ],
+        "label": "Sala 2"
+      }
+    ],
+    "byes": []
+  }
+}

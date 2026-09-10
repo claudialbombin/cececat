@@ -1,0 +1,49 @@
+================================================================================
+RESULTADOS — prueba
+Formato: Académico
+Generado: 10/9/2026, 17:14:07
+Número de parejas: 4
+================================================================================
+
+================================================================================
+RONDA 1
+================================================================================
+
+SALA 1
+--------------------------------------------------------------------------------
+  [Favor] Pareja 1: 9 puntos de ítem (Contenido: 3, Estilo: 3, Estrategia: 3) — puesto 2º
+  [Contra] Pareja 2: 12 puntos de ítem (Contenido: 4, Estilo: 4, Estrategia: 4) — puesto 1º
+  Jueces: clau (principal), ce (trainee)
+
+SALA 2
+--------------------------------------------------------------------------------
+  [Favor] Pareja 4: 54 puntos de ítem (Contenido: 44, Estilo: 4, Estrategia: 6) — puesto 1º
+  [Contra] Pareja 3: 11 puntos de ítem (Contenido: 4, Estilo: 1, Estrategia: 6) — puesto 2º
+  Jueces: claudia (principal)
+
+================================================================================
+RONDA 2
+================================================================================
+
+SALA 1
+--------------------------------------------------------------------------------
+  [Favor] Pareja 2: 9 puntos de ítem (Contenido: 3, Estilo: 3, Estrategia: 3) — puesto 2º
+  [Contra] Pareja 4: 12 puntos de ítem (Contenido: 4, Estilo: 4, Estrategia: 4) — puesto 1º
+  Jueces: clau (principal), ce (trainee)
+
+SALA 2
+--------------------------------------------------------------------------------
+  [Favor] Pareja 3: 19 puntos de ítem (Contenido: 4, Estilo: 7, Estrategia: 8) — puesto 1º
+  [Contra] Pareja 1: 18 puntos de ítem (Contenido: 4, Estilo: 6, Estrategia: 8) — puesto 2º
+  Jueces: claudia (principal)
+
+================================================================================
+CLASIFICACIÓN (a fecha de hoy)
+================================================================================
+
+Pos  Pareja                  Victorias       Pts Item  Favor Contra
+--------------------------------------------------------------------------------
+1    Pareja 4                2               66        1     1     
+2    Pareja 3                1               30        1     1     
+3    Pareja 2                1               21        1     1     
+4    Pareja 1                0               27        1     1     

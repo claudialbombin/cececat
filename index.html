@@ -779,7 +779,9 @@ function newState(name, formatKey, numPairs, pairNames, swingCount, roomNames, j
       isTrainee: !!j.isTrainee,
       email: (j.email || '').trim(),
       judgeToken: j.judgeToken || genToken(),
-      timesAssigned: 0
+      timesAssigned: 0,
+      judgedPairs: [],
+      judgedWith: []
     };
     nextJudgeId++;
   });
@@ -903,29 +905,56 @@ function roomLabel(index){
   return (custom && custom.trim()) ? custom.trim() : ('Sala ' + (index + 1));
 }
 
-function assignJudgesToRooms(roomsCount){
+function assignJudgesToRooms(roomsCount, idGroups){
   const assignments = Array.from({ length: roomsCount }, () => []);
   const judgeIds = Object.keys(state.judges || {}).map(Number);
   if (!judgeIds.length || roomsCount === 0) return assignments;
+  idGroups = idGroups || [];
 
   const pool = [...judgeIds];
-  const byChairPriority = () => [...pool].sort((a, b) => {
-    const ja = state.judges[a], jb = state.judges[b];
-    if (!!ja.isTrainee !== !!jb.isTrainee) return ja.isTrainee ? 1 : -1;
-    return (ja.timesAssigned || 0) - (jb.timesAssigned || 0);
-  });
 
+  // Penaliza repetir: (a) jueces que ya han evaluado a alguna de las parejas
+  // de esta sala en rondas anteriores, y (b) jueces que ya han coincidido
+  // en sala con alguno de los jueces ya puestos en esta sala esta ronda.
+  // Así todos los jueces rotan: juzgan a parejas distintas y con compañeros
+  // de mesa distintos siempre que sea posible.
+  const conflictScore = (jid, roomIdx) => {
+    const j = state.judges[jid];
+    const pairIdsHere = idGroups[roomIdx] || [];
+    const judgedPairs = j.judgedPairs || [];
+    const repeatPairs = pairIdsHere.filter(pid => judgedPairs.includes(pid)).length;
+    const judgedWith = j.judgedWith || [];
+    const roomSoFar = assignments[roomIdx];
+    const repeatCoJudges = roomSoFar.filter(ojid => judgedWith.includes(ojid)).length;
+    return repeatPairs + repeatCoJudges;
+  };
+
+  // Primera pasada: un juez (candidato a principal) por sala.
   for (let r = 0; r < roomsCount && pool.length; r++){
-    const order = byChairPriority();
+    const order = [...pool].sort((a, b) => {
+      const ja = state.judges[a], jb = state.judges[b];
+      if (!!ja.isTrainee !== !!jb.isTrainee) return ja.isTrainee ? 1 : -1;
+      const ca = conflictScore(a, r), cb = conflictScore(b, r);
+      if (ca !== cb) return ca - cb;
+      return (ja.timesAssigned || 0) - (jb.timesAssigned || 0);
+    });
     const chosen = order[0];
     assignments[r].push(chosen);
     pool.splice(pool.indexOf(chosen), 1);
   }
+
+  // Resto de jueces (si hay más jueces que salas): reparto equilibrado,
+  // evitando también repetir parejas juzgadas y compañeros de mesa.
   let r = 0;
   while (pool.length){
-    pool.sort((a, b) => (state.judges[a].timesAssigned || 0) - (state.judges[b].timesAssigned || 0));
+    const targetRoom = r % roomsCount;
+    pool.sort((a, b) => {
+      const ca = conflictScore(a, targetRoom), cb = conflictScore(b, targetRoom);
+      if (ca !== cb) return ca - cb;
+      return (state.judges[a].timesAssigned || 0) - (state.judges[b].timesAssigned || 0);
+    });
     const chosen = pool.shift();
-    assignments[r % roomsCount].push(chosen);
+    assignments[targetRoom].push(chosen);
     r++;
   }
   return assignments;
@@ -974,7 +1003,7 @@ function buildDrawTableHtml(roleShort, roles, rooms, byeNames, hasJudges){
 function buildRooms(){
   const F = fmt();
   const { idGroups, byes } = getIdGroups();
-  const judgeAssignments = assignJudgesToRooms(idGroups.length);
+  const judgeAssignments = assignJudgesToRooms(idGroups.length, idGroups);
   const rooms = idGroups.map((g, i) => ({
     roles: assignPositions(g, F.roles),
     judges: judgeAssignments[i] || [],
@@ -985,8 +1014,16 @@ function buildRooms(){
 
 function applyJudgeAssignments(rooms){
   rooms.forEach(room => {
-    (room.judges || []).forEach(jid => {
-      if (state.judges[jid]) state.judges[jid].timesAssigned = (state.judges[jid].timesAssigned || 0) + 1;
+    const judgeIdsInRoom = room.judges || [];
+    const pairIdsInRoom = Object.values(room.roles || {});
+    judgeIdsInRoom.forEach(jid => {
+      const j = state.judges[jid];
+      if (!j) return;
+      j.timesAssigned = (j.timesAssigned || 0) + 1;
+      j.judgedPairs = j.judgedPairs || [];
+      pairIdsInRoom.forEach(pid => { if (!j.judgedPairs.includes(pid)) j.judgedPairs.push(pid); });
+      j.judgedWith = j.judgedWith || [];
+      judgeIdsInRoom.forEach(ojid => { if (ojid !== jid && !j.judgedWith.includes(ojid)) j.judgedWith.push(ojid); });
     });
   });
 }
@@ -2211,7 +2248,7 @@ document.getElementById('btnAddJuezTab').addEventListener('click', () => {
     showToast('Introduce un email válido para el juez — se usa para enviarle su enlace.');
     return;
   }
-  const judge = { name: val, isTrainee: trainee.checked, email, judgeToken: genToken(), timesAssigned: 0 };
+  const judge = { name: val, isTrainee: trainee.checked, email, judgeToken: genToken(), timesAssigned: 0, judgedPairs: [], judgedWith: [] };
   state.judges[state.nextJudgeId] = judge;
   state.nextJudgeId += 1;
   input.value = '';
