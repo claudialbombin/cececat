@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/cececat-logo.svg" width="230" alt="CeceCat: un gato hablando por un micrófono en un podio"/>
+<img src="assets/cececat-logo.svg" width="100%" alt="CeceCat: un gato hablando por un micrófono en un podio"/>
 
 
 
