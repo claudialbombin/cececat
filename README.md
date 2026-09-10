@@ -2,11 +2,7 @@
 
 <img src="assets/cececat-logo.svg" width="230" alt="CeceCat: un gato hablando por un micrófono en un podio"/>
 
-<a href="#-qué-es">
-  <img src="https://readme-typing-svg.demolab.com/?font=Fira+Code&weight=500&size=21&duration=2800&pause=900&color=BD8A2E&center=true&vCenter=true&width=650&lines=Un+solo+archivo.+Sin+backend.+Sin+instalaci%C3%B3n.;Emparejamientos%2C+salas+y+clasificaci%C3%B3n+en+el+navegador.;Jueces+que+puntúan+en+vivo+desde+su+propio+móvil.;Copia+de+seguridad+autom%C3%A1tica%2C+por+ronda%2C+en+tu+disco." alt="Typing SVG" />
-</a>
 
-<br/><br/>
 
 ![Un solo archivo](https://img.shields.io/badge/Un%20solo%20archivo-index.html-bd8a2e?style=for-the-badge)
 ![Sin backend](https://img.shields.io/badge/Backend-cero-5c1830?style=for-the-badge)
