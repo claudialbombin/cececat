@@ -931,7 +931,7 @@ function assignJudgesToRooms(roomsCount){
 function judgesCellHtmlResolved(judgesResolved){
   if (!judgesResolved || !judgesResolved.length) return '<span class="empty" style="padding:0;">Sin asignar</span>';
   return judgesResolved.map((j, idx) => {
-    const isChair = j.isChair !== undefined ? j.isChair : idx === 0;
+    const isChair = (j.isChair !== undefined ? j.isChair : idx === 0) && !j.isTrainee;
     return escapeHtml(j.name) + (isChair ? ' <b>Ⓒ</b>' : '') + (j.isTrainee ? ' <span style="color:#7a5b12;">Ⓣ</span>' : '');
   }).join(', ');
 }
@@ -939,7 +939,7 @@ function judgesCellHtml(judgeIds){
   if (!judgeIds || !judgeIds.length) return judgesCellHtmlResolved([]);
   return judgesCellHtmlResolved(judgeIds.map((jid, idx) => {
     const j = state.judges[jid];
-    return j ? { name: j.name, isTrainee: j.isTrainee, isChair: idx === 0 } : null;
+    return j ? { name: j.name, isTrainee: j.isTrainee, isChair: idx === 0 && !j.isTrainee } : null;
   }).filter(Boolean));
 }
 function swingBadgeFor(name, isSwing){
@@ -1075,8 +1075,17 @@ function goToStep(n){
   if (toFocus) setTimeout(() => document.getElementById(toFocus).focus(), 30);
 }
 
-document.getElementById('wizNext1').addEventListener('click', () => goToStep(2));
-document.getElementById('wizName').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); goToStep(2); } });
+function wizStep1Next(){
+  const name = document.getElementById('wizName').value.trim();
+  if (!name){
+    showToast('Introduce un nombre para el torneo antes de continuar.');
+    document.getElementById('wizName').focus();
+    return;
+  }
+  goToStep(2);
+}
+document.getElementById('wizNext1').addEventListener('click', wizStep1Next);
+document.getElementById('wizName').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); wizStep1Next(); } });
 
 document.getElementById('wizBack2').addEventListener('click', () => goToStep(1));
 document.getElementById('wizNext2').addEventListener('click', () => {
@@ -1438,7 +1447,7 @@ function attachRoomListeners(){
   state.pendingPairings.rooms.forEach((room, ri) => {
     const chairId = (room.judges || [])[0];
     const chair = chairId ? state.judges[chairId] : null;
-    if (!chair || !chair.judgeToken) return;
+    if (!chair || chair.isTrainee || !chair.judgeToken) return;
     const unsub = db.collection(JUDGEROOMS_COLLECTION).doc(chair.judgeToken).onSnapshot(snap => {
       const data = snap.data();
       if (!data || data.roundNumber !== state.currentRound || data.status !== 'submitted' || !data.points) return;
@@ -1487,7 +1496,7 @@ function judgeStatusBlockHtml(room, ri){
   if (!firebaseReady) return '';
   const chairId = (room.judges || [])[0];
   const chair = chairId ? state.judges[chairId] : null;
-  if (!chair || !chair.judgeToken) return '';
+  if (!chair || chair.isTrainee || !chair.judgeToken) return '';
   return `<div class="judge-link-row">
     <button class="btn ghost small" type="button" data-action="copyChairLink" data-room="${ri}">Copiar enlace del juez principal</button>
     <span class="badge judgeStatusBadge" data-room="${ri}">Esperando al juez…</span>
@@ -1580,7 +1589,7 @@ document.getElementById('pairingsBody').addEventListener('click', (e) => {
   const room = state.pendingPairings.rooms[ri];
   const chairId = room ? (room.judges || [])[0] : null;
   const chair = chairId ? state.judges[chairId] : null;
-  if (chair && chair.judgeToken) copyText(judgeLinkUrl(chair.judgeToken));
+  if (chair && !chair.isTrainee && chair.judgeToken) copyText(judgeLinkUrl(chair.judgeToken));
   else showToast('Esta sala no tiene un juez principal asignado.');
 });
 
@@ -1669,7 +1678,7 @@ function renderDraw(){
     });
     const judgesResolved = (room.judges || []).map((jid, idx) => {
       const j = state.judges[jid];
-      return j ? { name: j.name, isTrainee: j.isTrainee, isChair: idx === 0 } : null;
+      return j ? { name: j.name, isTrainee: j.isTrainee, isChair: idx === 0 && !j.isTrainee } : null;
     }).filter(Boolean);
     return { label: room.label, cells, judgesResolved };
   });
@@ -1720,7 +1729,7 @@ async function pushJudgeAssignmentsToFirestore(){
     });
     const judgesResolved = (room.judges || []).map((jid, idx) => {
       const j = state.judges[jid];
-      return j ? { name: j.name, isTrainee: !!j.isTrainee, isChair: idx === 0 } : null;
+      return j ? { name: j.name, isTrainee: !!j.isTrainee, isChair: idx === 0 && !j.isTrainee } : null;
     }).filter(Boolean);
     return { label: room.label, cells, judgesResolved };
   });
@@ -1761,10 +1770,12 @@ async function pushJudgeAssignmentsToFirestore(){
         const id = room.roles[role];
         cells[role] = { name: state.pairs[id].name, isSwing: !!state.pairs[id].isSwing };
       });
-      const isChair = room.judges[0] === jid;
+      const chairJudge = state.judges[room.judges[0]];
+      const roomHasChair = !!(chairJudge && !chairJudge.isTrainee);
+      const isChair = roomHasChair && room.judges[0] === jid;
       const judgesResolved = (room.judges || []).map(rjid => {
         const rj = state.judges[rjid];
-        return rj ? { name: rj.name, isTrainee: !!rj.isTrainee, isChair: rjid === room.judges[0] } : null;
+        return rj ? { name: rj.name, isTrainee: !!rj.isTrainee, isChair: roomHasChair && rjid === room.judges[0] } : null;
       }).filter(Boolean);
       payload = {
         tournamentToken: state.firebaseTournamentToken,
@@ -2136,7 +2147,7 @@ function buildTxtReport(){
         const jNames = room.judges.map((jid, idx) => {
           const j = state.judges[jid];
           if (!j) return null;
-          return j.name + (idx === 0 ? ' (principal)' : '') + (j.isTrainee ? ' (trainee)' : '');
+          return j.name + (idx === 0 && !j.isTrainee ? ' (principal)' : '') + (j.isTrainee ? ' (trainee)' : '');
         }).filter(Boolean).join(', ');
         if (jNames) out += `  Jueces: ${jNames}\n`;
       }
@@ -2280,7 +2291,9 @@ function renderJudgeTurnoTab(token, data){
   }
 
   if (!data.isChair){
-    html += `<p class="hint">Solo el juez principal de la sala puede enviar la puntuación. Comparte tu valoración con ${escapeHtml(chairEntry ? chairEntry.name : 'el juez principal')} para que la introduzca.</p>`;
+    html += chairEntry
+      ? `<p class="hint">Solo el juez principal de la sala puede enviar la puntuación. Comparte tu valoración con ${escapeHtml(chairEntry.name)} para que la introduzca.</p>`
+      : `<p class="hint">Esta sala no tiene juez principal esta ronda (un juez en prácticas no puede serlo), así que nadie puede enviar la puntuación desde aquí. Comparte tu valoración con la mesa central para que la introduzca a mano.</p>`;
     el.innerHTML = html;
     return;
   }
