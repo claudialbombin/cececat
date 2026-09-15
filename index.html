@@ -156,7 +156,7 @@
     opacity:0; transition:opacity .25s; pointer-events:none; z-index:50;
   }
   .toast.show{ opacity:1; }
-  .roster-item{ display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+  .roster-item{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:8px; }
   .roster-item span.num{ width:28px; text-align:right; color:var(--text-soft); font-size:13px; flex-shrink:0; }
   .roster-item input{ margin-bottom:0; }
   .footer-actions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
@@ -249,6 +249,7 @@
   <button data-tab="parejas">Parejas</button>
   <button data-tab="salas">Salas</button>
   <button data-tab="jueces">Jueces</button>
+  <button data-tab="incompat">Incompatibilidades</button>
   <button data-tab="datos">Datos y copia de seguridad</button>
 </nav>
 
@@ -258,6 +259,13 @@
   <section id="judgeView" style="display:none;">
     <div class="card judge-card">
       <div id="judgeBody">Cargando…</div>
+    </div>
+  </section>
+
+  <!-- PAREJA: vista minima para el representante de un equipo (?#pair=token) -->
+  <section id="pairView" style="display:none;">
+    <div class="card judge-card">
+      <div id="pairBody">Cargando…</div>
     </div>
   </section>
 
@@ -493,6 +501,7 @@
     <div class="card">
       <h2>Parejas inscritas</h2>
       <div class="hint">Puedes corregir un nombre, su emoji (para identificarla de un vistazo en el draw y la clasificación) o, en BP, el nombre de sus dos oradores, en cualquier momento sin perder sus resultados.</div>
+      <div class="hint">Si pones el email del representante del equipo, en cuanto guardes le llega automáticamente su enlace personal — antes de generar el draw de la ronda 1 puede usarlo para proponer incompatibilidades con jueces (que tú luego aceptas o declinas en la pestaña Incompatibilidades).</div>
       <div id="rosterBody"></div>
       <div class="footer-actions">
         <button class="btn" id="btnSaveRoster">Guardar nombres</button>
@@ -544,6 +553,19 @@
       <div class="footer-actions">
         <button class="btn" id="btnSaveJueces">Guardar cambios</button>
       </div>
+    </div>
+  </section>
+
+  <!-- INCOMPATIBILIDADES -->
+  <section id="tab-incompat" class="tab-content" style="display:none;">
+    <div class="card">
+      <h2>Incompatibilidades</h2>
+      <p class="hint">Antes de generar el draw de la ronda 1, jueces y equipos pueden proponer incompatibilidades desde su enlace personal. Aquí decides cuáles se aceptan — solo las aceptadas se aplican de verdad al reparto de jueces.</p>
+      <div id="incompatLockStatus" style="margin-bottom:10px;"></div>
+      <div class="footer-actions" style="margin-top:0; margin-bottom:14px;">
+        <button class="btn ghost" id="btnRefreshIncompat" type="button">Actualizar</button>
+      </div>
+      <div id="incompatBody">Cargando…</div>
     </div>
   </section>
 
@@ -682,6 +704,8 @@ const FIREBASE_CONFIG = {
 };
 const DRAWS_COLLECTION = "cececat_draws";
 const JUDGEROOMS_COLLECTION = "cececat_judgerooms";
+const INCOMPAT_COLLECTION = "cececat_incompat";
+const PAIRLINKS_COLLECTION = "cececat_pairlinks";
 let db = null;
 let firebaseReady = false;
 try{
@@ -718,6 +742,9 @@ function genToken(){
 function judgeLinkUrl(token){
   return location.href.split('#')[0] + '#judge=' + encodeURIComponent(token);
 }
+function pairLinkUrl(token){
+  return location.href.split('#')[0] + '#pair=' + encodeURIComponent(token);
+}
 function copyText(text){
   if (navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(text).then(
@@ -737,6 +764,11 @@ function ensureJudgeAndTournamentTokens(s){
     if (!j.judgeToken) j.judgeToken = genToken();
     if (j.email === undefined) j.email = '';
   });
+  Object.values(s.pairs || {}).forEach(p => {
+    if (!p.pairToken) p.pairToken = genToken();
+    if (p.email === undefined) p.email = '';
+  });
+  if (s.incompatibilitiesLocked === undefined) s.incompatibilitiesLocked = false;
 }
 function maybeSendJudgeEmail(judge, tournamentName){
   if (!judge || !judge.email || !judge.judgeToken) return;
@@ -755,6 +787,31 @@ function maybeSendJudgeEmail(judge, tournamentName){
   }).catch(err => {
     console.warn('No se pudo enviar el email', err);
     showToast(`No se pudo enviar el email a ${judge.name} — copia el enlace y envíaselo tú.`);
+  });
+}
+// Reutiliza el mismo servicio y plantilla de EmailJS que los jueces (con las
+// mismas variables: to_email/to_name/tournament_name/judge_link) para no
+// depender de una segunda plantilla que no existe en tu cuenta. El texto del
+// correo será el mismo que reciben los jueces — si más adelante quieres un
+// texto distinto para las parejas, hace falta crear otra plantilla en
+// EmailJS y darme su ID.
+function maybeSendPairEmail(pair, tournamentName){
+  if (!pair || !pair.email || !pair.pairToken) return;
+  const link = pairLinkUrl(pair.pairToken);
+  if (!emailjsReady){
+    showToast(`Email no configurado todavía — copia el enlace y envíaselo tú al representante de ${pair.name}.`);
+    return;
+  }
+  emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.templateId, {
+    to_email: pair.email,
+    to_name: pair.name,
+    tournament_name: tournamentName || 'Torneo de debate',
+    judge_link: link
+  }).then(() => {
+    showToast(`Email enviado al representante de ${pair.name} (${pair.email}).`);
+  }).catch(err => {
+    console.warn('No se pudo enviar el email', err);
+    showToast(`No se pudo enviar el email — copia el enlace y envíaselo tú al representante de ${pair.name}.`);
   });
 }
 
@@ -793,7 +850,9 @@ function newState(name, formatKey, numPairs, pairNames, swingCount, roomNames, j
       wins:0, item_points:0,
       positions,
       history: [],
-      debates: []
+      debates: [],
+      pairToken: genToken(),
+      email: ''
     };
     if (formatKey === 'bp'){
       const sp = (speakerNames && speakerNames[i-1]) || null;
@@ -836,7 +895,8 @@ function newState(name, formatKey, numPairs, pairNames, swingCount, roomNames, j
     rounds: [],
     currentRound: 1,
     started: false,
-    pendingPairings: null
+    pendingPairings: null,
+    incompatibilitiesLocked: false
   };
 }
 
@@ -2030,6 +2090,7 @@ document.getElementById('btnCreateTournament').addEventListener('click', () => {
   }
   renderAll();
   setupAutosave();
+  pushIncompatMetaToFirestore();
 });
 
 /* ---------- Navegación ---------- */
@@ -2042,6 +2103,7 @@ function switchTab(tab){
   if (tab === 'parejas') renderRoster();
   if (tab === 'salas') renderSalas();
   if (tab === 'jueces') renderJueces();
+  if (tab === 'incompat') renderIncompatibilidades();
   if (tab === 'datos') renderSummary();
   if (tab === 'ronda') renderRound();
   if (tab === 'draw') renderDraw();
@@ -2338,8 +2400,79 @@ function renderDraw(){
 
 function generatePairingsForRound(){
   state.pendingPairings = buildRooms();
+  // A partir del draw de la ronda 1, jueces y parejas ya no pueden proponer
+  // (ni editar) incompatibilidades desde su enlace personal — solo la mesa
+  // central puede seguir revisando las que ya hubieran llegado antes.
+  if (state.currentRound === 1 && !state.incompatibilitiesLocked){
+    state.incompatibilitiesLocked = true;
+  }
   saveState();
   pushJudgeAssignmentsToFirestore();
+  pushIncompatMetaToFirestore();
+}
+
+// Mantiene al día, en Firestore, los datos que necesitan las vistas de juez
+// y de pareja para poder proponer incompatibilidades: el nombre del torneo,
+// si ya está bloqueado (se generó el draw de la ronda 1) y el listado de
+// jueces/parejas con sus nombres (para poder elegir contra quién). Se llama
+// cada vez que cambia algo relevante: crear el torneo, añadir/quitar/editar
+// jueces, guardar la pestaña Parejas, y al generar el draw de la ronda 1.
+async function pushIncompatMetaToFirestore(){
+  if (!firebaseReady) return;
+  if (!state.firebaseTournamentToken){ state.firebaseTournamentToken = genToken(); saveState(); }
+  const judgesList = Object.keys(state.judges || {}).map(Number).sort((a,b) => a-b)
+    .map(id => ({ id, name: state.judges[id].name }));
+  const pairsList = Object.keys(state.pairs || {}).map(Number).sort((a,b) => a-b)
+    .map(id => ({ id, name: pairDisplayName(id) }));
+  try{
+    await db.collection(INCOMPAT_COLLECTION).doc(state.firebaseTournamentToken).set({
+      tournamentName: state.tournamentName,
+      locked: !!state.incompatibilitiesLocked,
+      judgesList,
+      pairsList,
+      updatedAt: Date.now()
+    }, { merge: true });
+  }catch(e){ console.warn('No se pudo publicar el listado para incompatibilidades', e); }
+  await pushIdentityStubsToFirestore();
+}
+
+// Para que un juez o una pareja puedan abrir su enlace personal y saber a
+// qué torneo pertenecen incluso ANTES de que se genere ningún draw (que es
+// cuando se publica su ficha completa), se les deja aquí una "ficha mínima"
+// con solo lo imprescindible: el token del torneo, su nombre y su id. Usa
+// merge, así que nunca pisa los datos de una ronda ya publicada (asignación,
+// puntuación...) — solo añade/actualiza estos campos concretos.
+async function pushIdentityStubsToFirestore(){
+  if (!firebaseReady) return;
+  const judgeIds = Object.keys(state.judges || {}).map(Number);
+  await Promise.all(judgeIds.map(async jid => {
+    const j = state.judges[jid];
+    if (!j || !j.judgeToken) return;
+    try{
+      await db.collection(JUDGEROOMS_COLLECTION).doc(j.judgeToken).set({
+        tournamentToken: state.firebaseTournamentToken,
+        tournamentName: state.tournamentName,
+        format: state.format,
+        judgeId: jid,
+        updatedAt: Date.now()
+      }, { merge: true });
+    }catch(e){ console.warn('No se pudo publicar la ficha mínima del juez', j.name, e); }
+  }));
+  const pairIds = Object.keys(state.pairs || {}).map(Number);
+  await Promise.all(pairIds.map(async pid => {
+    const p = state.pairs[pid];
+    if (!p || !p.pairToken) return;
+    try{
+      await db.collection(PAIRLINKS_COLLECTION).doc(p.pairToken).set({
+        tournamentToken: state.firebaseTournamentToken,
+        tournamentName: state.tournamentName,
+        format: state.format,
+        pairId: pid,
+        pairName: pairDisplayName(pid),
+        updatedAt: Date.now()
+      }, { merge: true });
+    }catch(e){ console.warn('No se pudo publicar la ficha mínima de la pareja', p.name, e); }
+  }));
 }
 
 async function pushJudgeAssignmentsToFirestore(){
@@ -2390,6 +2523,7 @@ async function pushJudgeAssignmentsToFirestore(){
         format: state.format,
         roundNumber: state.currentRound,
         assigned: false,
+        judgeId: jid,
         updatedAt: Date.now()
       };
     } else {
@@ -2423,6 +2557,7 @@ async function pushJudgeAssignmentsToFirestore(){
         status: 'pending',
         points: null,
         submittedByName: null,
+        judgeId: jid,
         updatedAt: Date.now()
       };
     }
@@ -2537,8 +2672,23 @@ function renderRoster(){
       <input type="text" data-id="${id}" class="rosterInput" value="${escapeHtml(p.name)}" placeholder="Nombre de la pareja" style="flex:1.4; min-width:140px;">
       ${speakersHtml}
       ${swingBadge(id)}
+      <input type="email" data-id="${id}" class="rosterEmailInput" value="${escapeHtml(p.email || '')}" placeholder="email del representante" style="flex:1.2; min-width:180px;">
+      <button class="btn ghost small copyPairLink" type="button" data-id="${id}">Copiar enlace</button>
+      <button class="btn ghost small resendPairEmail" type="button" data-id="${id}">Reenviar email</button>
     </div>`;
   }).join('');
+  container.querySelectorAll('.copyPairLink').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = state.pairs[btn.dataset.id];
+      if (p && p.pairToken) copyText(pairLinkUrl(p.pairToken));
+    });
+  });
+  container.querySelectorAll('.resendPairEmail').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = state.pairs[btn.dataset.id];
+      if (p) maybeSendPairEmail(p, state.tournamentName);
+    });
+  });
 }
 
 document.getElementById('btnSaveRoster').addEventListener('click', () => {
@@ -2561,10 +2711,15 @@ document.getElementById('btnSaveRoster').addEventListener('click', () => {
     const val = inp.value.trim();
     if (val) state.pairs[id].speaker2 = val;
   });
+  document.querySelectorAll('.rosterEmailInput').forEach(inp => {
+    const id = inp.dataset.id;
+    state.pairs[id].email = inp.value.trim();
+  });
   saveState();
   showToast('Nombres guardados.');
   renderRound();
   renderStandings();
+  pushIncompatMetaToFirestore();
 });
 
 /* ---------- Salas ---------- */
@@ -2654,6 +2809,7 @@ function renderJueces(){
       delete state.judges[btn.dataset.id];
       saveState();
       renderJueces();
+      pushIncompatMetaToFirestore();
     });
   });
   container.querySelectorAll('.copyJuezLink').forEach(btn => {
@@ -2689,6 +2845,7 @@ document.getElementById('btnAddJuezTab').addEventListener('click', () => {
   saveState();
   renderJueces();
   maybeSendJudgeEmail(judge, state.tournamentName);
+  pushIncompatMetaToFirestore();
 });
 document.getElementById('juezNuevoInput').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); document.getElementById('btnAddJuezTab').click(); } });
 document.getElementById('btnSaveJueces').addEventListener('click', () => {
@@ -2714,7 +2871,130 @@ document.getElementById('btnSaveJueces').addEventListener('click', () => {
   showToast('Jueces guardados.');
   renderJueces();
   renderRound();
+  pushIncompatMetaToFirestore();
 });
+
+/* ---------- Incompatibilidades (revisión central) ----------
+   Jueces y parejas proponen incompatibilidades desde su enlace personal
+   (siempre antes de que se genere el draw de la ronda 1). Aquí se revisan
+   una a una: solo cuando se ACEPTA una solicitud se copia de verdad a
+   state.judges[...].incompatibilities, que es lo único que usa el reparto
+   de jueces por sala. Declinar una solicitud no cambia nada del torneo. */
+let lastIncompatDoc = null;
+
+function incompatStatusBadge(status){
+  if (status === 'accepted') return '<span class="badge win">Aceptada</span>';
+  if (status === 'declined') return '<span class="badge" style="background:#fbe4e4; color:#8a2e2e;">Declinada</span>';
+  return '<span class="badge swing">Pendiente</span>';
+}
+
+function renderIncompatLockStatus(){
+  const el = document.getElementById('incompatLockStatus');
+  if (!el) return;
+  el.innerHTML = state.incompatibilitiesLocked
+    ? '<span class="badge" style="background:#fbe4e4; color:#8a2e2e;">Bloqueado</span> Ya se generó el draw de la ronda 1 — jueces y equipos ya no pueden proponer ni editar incompatibilidades, pero puedes seguir revisando las que hubieran llegado antes.'
+    : '<span class="badge win">Abierto</span> Todavía no se ha generado el draw de la ronda 1 — jueces y equipos pueden proponer incompatibilidades desde su enlace.';
+}
+
+async function renderIncompatibilidades(){
+  renderIncompatLockStatus();
+  const body = document.getElementById('incompatBody');
+  if (!firebaseReady){
+    body.innerHTML = '<p class="empty">Esta copia de CeceCat todavía no tiene activado Firestore, así que jueces y equipos no pueden enviar solicitudes de incompatibilidad de forma remota. Puedes seguir marcándolas tú misma desde las pestañas Jueces/Parejas.</p>';
+    return;
+  }
+  if (!state.firebaseTournamentToken){ state.firebaseTournamentToken = genToken(); saveState(); }
+  body.innerHTML = 'Cargando…';
+  pushIncompatMetaToFirestore();
+  try{
+    const snap = await db.collection(INCOMPAT_COLLECTION).doc(state.firebaseTournamentToken).get();
+    lastIncompatDoc = snap.exists ? snap.data() : null;
+  }catch(e){
+    console.warn('No se pudieron cargar las incompatibilidades', e);
+    body.innerHTML = '<p class="empty">No se pudo cargar — revisa tu conexión y pulsa "Actualizar".</p>';
+    return;
+  }
+  renderIncompatBodyFromCache();
+}
+
+function renderIncompatBodyFromCache(){
+  const body = document.getElementById('incompatBody');
+  const d = lastIncompatDoc;
+  const rows = [];
+  const collect = (kind, map) => {
+    Object.entries(map || {}).forEach(([token, items]) => {
+      Object.entries(items || {}).forEach(([key, item]) => {
+        rows.push({ kind, token, key, ...item });
+      });
+    });
+  };
+  collect('judge', d && d.judgeRequests);
+  collect('pair', d && d.pairRequests);
+  rows.sort((a, b) => (a.status === 'pending' ? 0 : 1) - (b.status === 'pending' ? 0 : 1) || (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  if (!rows.length){
+    body.innerHTML = '<p class="empty">Todavía no ha llegado ninguna solicitud de incompatibilidad.</p>';
+    return;
+  }
+
+  body.innerHTML = rows.map(r => {
+    const who = r.kind === 'judge' ? `Juez ${escapeHtml(r.judgeName || '?')}` : `Pareja ${escapeHtml(r.pairName || '?')}`;
+    const whom = r.kind === 'judge' ? escapeHtml(r.pairName || '?') : `Juez ${escapeHtml(r.judgeName || '?')}`;
+    const typeLabel = r.type === 'objective' ? '<b>Objetiva</b> (nunca en la misma sala)' : '<b>Subjetiva</b> (se evita si se puede)';
+    const actions = r.status === 'pending'
+      ? `<button class="btn ghost small acceptIncompat" type="button" data-kind="${r.kind}" data-token="${escapeHtml(r.token)}" data-key="${escapeHtml(r.key)}">Aceptar</button>
+         <button class="btn ghost small declineIncompat" type="button" data-kind="${r.kind}" data-token="${escapeHtml(r.token)}" data-key="${escapeHtml(r.key)}">Declinar</button>`
+      : '';
+    return `<div class="list-item">
+      <span style="flex:2; min-width:220px;">${who} ↔ ${whom} — ${typeLabel}</span>
+      ${incompatStatusBadge(r.status)}
+      ${actions}
+    </div>`;
+  }).join('');
+
+  body.querySelectorAll('.acceptIncompat').forEach(btn => {
+    btn.addEventListener('click', () => resolveIncompatRequest(btn.dataset.kind, btn.dataset.token, btn.dataset.key, 'accepted'));
+  });
+  body.querySelectorAll('.declineIncompat').forEach(btn => {
+    btn.addEventListener('click', () => resolveIncompatRequest(btn.dataset.kind, btn.dataset.token, btn.dataset.key, 'declined'));
+  });
+}
+
+async function resolveIncompatRequest(kind, token, key, decision){
+  const d = lastIncompatDoc;
+  const map = kind === 'judge' ? (d && d.judgeRequests) : (d && d.pairRequests);
+  const item = map && map[token] && map[token][key];
+  if (!item) return;
+
+  if (decision === 'accepted'){
+    const judgeId = item.judgeId;
+    const pairId = item.pairId;
+    if (state.judges[judgeId]){
+      if (!state.judges[judgeId].incompatibilities) state.judges[judgeId].incompatibilities = {};
+      state.judges[judgeId].incompatibilities[pairId] = item.type;
+      saveState();
+      renderJueces();
+    }
+  }
+
+  item.status = decision;
+  item.resolvedAt = Date.now();
+  renderIncompatBodyFromCache();
+
+  const path = kind === 'judge' ? `judgeRequests.${token}.${key}` : `pairRequests.${token}.${key}`;
+  try{
+    await db.collection(INCOMPAT_COLLECTION).doc(state.firebaseTournamentToken).set({
+      [`${path}.status`]: decision,
+      [`${path}.resolvedAt`]: item.resolvedAt
+    }, { merge: true });
+    showToast(decision === 'accepted' ? 'Incompatibilidad aceptada y aplicada.' : 'Solicitud declinada.');
+  }catch(e){
+    console.warn('No se pudo guardar la decisión', e);
+    showToast('No se pudo guardar en el servidor — revisa tu conexión e inténtalo otra vez.');
+  }
+}
+
+document.getElementById('btnRefreshIncompat').addEventListener('click', renderIncompatibilidades);
 
 /* ---------- Resumen ---------- */
 
@@ -2947,6 +3227,9 @@ function renderJudgeView(token, data){
       <label class="option ${judgeActiveTab==='draw' ? 'checked' : ''}" data-jtab="draw" style="text-align:center;">
         <span class="opt-title">Draw</span>
       </label>
+      <label class="option ${judgeActiveTab==='incompat' ? 'checked' : ''}" data-jtab="incompat" style="text-align:center;">
+        <span class="opt-title">Incompatibilidades</span>
+      </label>
     </div>
     <div id="judgeTabBody"></div>`;
   document.querySelectorAll('#judgeTabSwitch .option').forEach(el => {
@@ -2961,6 +3244,7 @@ function renderJudgeView(token, data){
 
 function renderJudgeTabBody(token, data){
   if (judgeActiveTab === 'draw') renderJudgeDrawTab(data);
+  else if (judgeActiveTab === 'incompat') renderJudgeIncompatTab(token, data);
   else renderJudgeTurnoTab(token, data);
 }
 
@@ -3048,6 +3332,89 @@ async function renderJudgeDrawTab(data){
   }
 }
 
+async function renderJudgeIncompatTab(token, data){
+  const el = document.getElementById('judgeTabBody');
+  el.innerHTML = 'Cargando…';
+  if (!data.tournamentToken){
+    el.innerHTML = `<p class="empty">Todavía no se ha podido cargar tu ficha del torneo — vuelve a abrir este enlace en unos segundos.</p>`;
+    return;
+  }
+  let d;
+  try{
+    const snap = await db.collection(INCOMPAT_COLLECTION).doc(data.tournamentToken).get();
+    d = snap.exists ? snap.data() : {};
+  }catch(e){
+    console.warn('No se pudieron cargar las incompatibilidades', e);
+    el.innerHTML = `<p class="empty">No se pudo cargar. Revisa tu conexión e inténtalo otra vez.</p>`;
+    return;
+  }
+  const pairsList = d.pairsList || [];
+  const mine = (d.judgeRequests && d.judgeRequests[token]) || {};
+  const locked = !!d.locked;
+
+  if (!pairsList.length){
+    el.innerHTML = `<p class="empty">Todavía no hay parejas/equipos cargados en el torneo.</p>`;
+    return;
+  }
+
+  const rowsHtml = pairsList.map(p => {
+    const existing = mine[p.id];
+    const val = existing ? existing.type : '';
+    const statusHtml = existing ? ` ${incompatStatusBadge(existing.status)}` : '';
+    return `<div class="list-item">
+      <span style="flex:2; min-width:160px;">${escapeHtml(p.name)}</span>
+      <select data-pair="${p.id}" class="myIncompatSelect" ${locked ? 'disabled' : ''} style="min-width:200px; margin:0; padding:8px 10px; border:1px solid var(--border); border-radius:8px;">
+        <option value="">Sin incompatibilidad</option>
+        <option value="subjective" ${val === 'subjective' ? 'selected' : ''}>Subjetiva (se evita si se puede)</option>
+        <option value="objective" ${val === 'objective' ? 'selected' : ''}>Objetiva (nunca en la misma sala)</option>
+      </select>
+      ${statusHtml}
+    </div>`;
+  }).join('');
+
+  el.innerHTML = locked
+    ? `<p class="hint">Ya se generó el draw de la ronda 1, así que ya no se pueden proponer ni cambiar incompatibilidades. Esto es lo que quedó registrado:</p>${rowsHtml}`
+    : `<p class="hint">Marca, para cada pareja/equipo, si tienes una incompatibilidad con ellos. <b>Objetiva</b>: nunca deberíais coincidir en la misma sala. <b>Subjetiva</b>: se evita si es posible. La mesa central revisa y acepta o declina cada una — solo se aplican las aceptadas.</p>
+      ${rowsHtml}
+      <div class="footer-actions">
+        <button class="btn gold" type="button" id="btnSubmitJudgeIncompat">Enviar</button>
+      </div>`;
+
+  if (!locked){
+    document.getElementById('btnSubmitJudgeIncompat').addEventListener('click', () => submitJudgeIncompat(token, data));
+  }
+}
+
+async function submitJudgeIncompat(token, data){
+  const map = {};
+  document.querySelectorAll('.myIncompatSelect').forEach(sel => {
+    if (!sel.value) return;
+    const pairId = Number(sel.dataset.pair);
+    map[pairId] = { type: sel.value, status: 'pending', judgeId: data.judgeId, pairId, updatedAt: Date.now() };
+  });
+  const btn = document.getElementById('btnSubmitJudgeIncompat');
+  if (btn) btn.disabled = true;
+  try{
+    const snap = await db.collection(INCOMPAT_COLLECTION).doc(data.tournamentToken).get();
+    const d = snap.exists ? snap.data() : {};
+    const pairsList = d.pairsList || [];
+    const judgesList = d.judgesList || [];
+    const myName = (judgesList.find(j => j.id === data.judgeId) || {}).name || '';
+    Object.values(map).forEach(item => {
+      item.judgeName = myName;
+      item.pairName = (pairsList.find(p => p.id === item.pairId) || {}).name || ('Pareja ' + item.pairId);
+    });
+    await db.collection(INCOMPAT_COLLECTION).doc(data.tournamentToken).set({
+      [`judgeRequests.${token}`]: map
+    }, { merge: true });
+    showToast('Incompatibilidades enviadas — la mesa central las revisará.');
+  }catch(e){
+    console.warn('No se pudo enviar', e);
+    showToast('No se pudo enviar — revisa tu conexión e inténtalo otra vez.');
+  }
+  if (btn) btn.disabled = false;
+}
+
 async function submitJudgeScores(token, data, F, labelsByRole, genericLabels, min, max){
   const points = {};
   for (const role of F.roles){
@@ -3107,14 +3474,126 @@ async function initJudgeMode(token){
   try{
     const snap = await db.collection(JUDGEROOMS_COLLECTION).doc(token).get();
     if (!snap.exists){
-      body.innerHTML = `<h2>Todavía no hay ronda</h2>
-        <p>Este enlace es tuyo para todo el torneo, pero la mesa central aún no ha generado los emparejamientos de la primera ronda.</p>
-        <p class="hint">Vuelve a abrir este mismo enlace cuando te avisen de que ha empezado la ronda.</p>`;
+      body.innerHTML = `<h2>Todavía no hay nada que ver</h2>
+        <p>Este enlace es tuyo para todo el torneo, pero la mesa central todavía no lo ha registrado del todo (o aún no ha generado los emparejamientos de la primera ronda).</p>
+        <p class="hint">Vuelve a abrir este mismo enlace en un rato, o cuando te avisen de que ha empezado la ronda.</p>`;
       return;
     }
     renderJudgeView(token, snap.data());
   }catch(e){
     console.warn('No se pudo cargar la asignación', e);
+    body.innerHTML = `<h2>No se pudo cargar</h2>
+      <p>Revisa tu conexión a internet e inténtalo de nuevo recargando esta página.</p>`;
+  }
+}
+
+/* ---------- Vista de pareja (enlace personal, solo para proponer incompatibilidades antes del draw 1) ---------- */
+
+function renderPairView(token, data){
+  const body = document.getElementById('pairBody');
+  const judgesList = data.judgesList || [];
+  const mine = (data.judgeRequestsForMe) || {};
+  const locked = !!data.locked;
+
+  if (!judgesList.length){
+    body.innerHTML = `<div class="step-eyebrow">${escapeHtml(data.tournamentName || '')}</div>
+      <p class="empty">Todavía no hay jueces cargados en el torneo.</p>`;
+    return;
+  }
+
+  const rowsHtml = judgesList.map(j => {
+    const existing = mine[j.id];
+    const val = existing ? existing.type : '';
+    const statusHtml = existing ? ` ${incompatStatusBadge(existing.status)}` : '';
+    return `<div class="list-item">
+      <span style="flex:2; min-width:160px;">${escapeHtml(j.name)}</span>
+      <select data-judge="${j.id}" class="myIncompatSelectPair" ${locked ? 'disabled' : ''} style="min-width:200px; margin:0; padding:8px 10px; border:1px solid var(--border); border-radius:8px;">
+        <option value="">Sin incompatibilidad</option>
+        <option value="subjective" ${val === 'subjective' ? 'selected' : ''}>Subjetiva (se evita si se puede)</option>
+        <option value="objective" ${val === 'objective' ? 'selected' : ''}>Objetiva (nunca en la misma sala)</option>
+      </select>
+      ${statusHtml}
+    </div>`;
+  }).join('');
+
+  body.innerHTML = `<div class="step-eyebrow">${escapeHtml(data.tournamentName || '')} · ${escapeHtml(data.pairName || '')}</div>
+    <h2 style="margin-top:0;">Incompatibilidades con jueces</h2>
+    ${locked
+      ? `<p class="hint">Ya se generó el draw de la ronda 1, así que ya no se pueden proponer ni cambiar incompatibilidades. Esto es lo que quedó registrado:</p>${rowsHtml}`
+      : `<p class="hint">Marca, para cada juez, si vuestro equipo tiene una incompatibilidad con ellos. <b>Objetiva</b>: nunca deberíais coincidir en la misma sala. <b>Subjetiva</b>: se evita si es posible. La mesa central revisa y acepta o declina cada una — solo se aplican las aceptadas.</p>
+        ${rowsHtml}
+        <div class="footer-actions">
+          <button class="btn gold" type="button" id="btnSubmitPairIncompat">Enviar</button>
+        </div>`}`;
+
+  if (!locked){
+    document.getElementById('btnSubmitPairIncompat').addEventListener('click', () => submitPairIncompat(token, data));
+  }
+}
+
+async function submitPairIncompat(token, data){
+  const map = {};
+  document.querySelectorAll('.myIncompatSelectPair').forEach(sel => {
+    if (!sel.value) return;
+    const judgeId = Number(sel.dataset.judge);
+    map[judgeId] = { type: sel.value, status: 'pending', judgeId, pairId: data.pairId, updatedAt: Date.now() };
+  });
+  const btn = document.getElementById('btnSubmitPairIncompat');
+  if (btn) btn.disabled = true;
+  try{
+    const snap = await db.collection(INCOMPAT_COLLECTION).doc(data.tournamentToken).get();
+    const d = snap.exists ? snap.data() : {};
+    const judgesList = d.judgesList || [];
+    Object.values(map).forEach(item => {
+      item.pairName = data.pairName || '';
+      item.judgeName = (judgesList.find(j => j.id === item.judgeId) || {}).name || ('Juez ' + item.judgeId);
+    });
+    await db.collection(INCOMPAT_COLLECTION).doc(data.tournamentToken).set({
+      [`pairRequests.${token}`]: map
+    }, { merge: true });
+    showToast('Incompatibilidades enviadas — la mesa central las revisará.');
+  }catch(e){
+    console.warn('No se pudo enviar', e);
+    showToast('No se pudo enviar — revisa tu conexión e inténtalo otra vez.');
+  }
+  if (btn) btn.disabled = false;
+}
+
+async function initPairMode(token){
+  document.getElementById('mainNav').style.display = 'none';
+  document.getElementById('headerStatus').style.display = 'none';
+  document.getElementById('setupView').style.display = 'none';
+  document.querySelectorAll('.tab-content').forEach(s => s.style.display = 'none');
+  document.getElementById('pairView').style.display = 'block';
+  const body = document.getElementById('pairBody');
+  if (!firebaseReady){
+    body.innerHTML = `<h2>Enlace no disponible</h2>
+      <p>Esta copia de CeceCat todavía no tiene activado el envío remoto de incompatibilidades.</p>
+      <p class="hint">Contacta directamente con la mesa central.</p>`;
+    return;
+  }
+  try{
+    const linkSnap = await db.collection(PAIRLINKS_COLLECTION).doc(token).get();
+    if (!linkSnap.exists){
+      body.innerHTML = `<h2>Todavía no hay nada que ver</h2>
+        <p>Este enlace es vuestro, pero la mesa central todavía no lo ha registrado del todo.</p>
+        <p class="hint">Vuelve a abrir este mismo enlace en un rato.</p>`;
+      return;
+    }
+    const linkData = linkSnap.data();
+    const incompatSnap = await db.collection(INCOMPAT_COLLECTION).doc(linkData.tournamentToken).get();
+    const incompatData = incompatSnap.exists ? incompatSnap.data() : {};
+    renderPairView(token, {
+      tournamentToken: linkData.tournamentToken,
+      tournamentName: incompatData.tournamentName || linkData.tournamentName,
+      pairId: linkData.pairId,
+      pairName: linkData.pairName,
+      locked: !!incompatData.locked,
+      judgesList: incompatData.judgesList || [],
+      judgeRequestsForMe: (incompatData.pairRequests && incompatData.pairRequests[token]) || {}
+    });
+  }catch(e){
+    console.warn('No se pudo cargar', e);
     body.innerHTML = `<h2>No se pudo cargar</h2>
       <p>Revisa tu conexión a internet e inténtalo de nuevo recargando esta página.</p>`;
   }
@@ -3126,6 +3605,11 @@ async function initJudgeMode(token){
   const judgeMatch = /(?:^|[#&])judge=([^&]+)/.exec(location.hash);
   if (judgeMatch){
     initJudgeMode(decodeURIComponent(judgeMatch[1]));
+    return;
+  }
+  const pairMatch = /(?:^|[#&])pair=([^&]+)/.exec(location.hash);
+  if (pairMatch){
+    initPairMode(decodeURIComponent(pairMatch[1]));
     return;
   }
   const saved = loadState();
