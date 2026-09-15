@@ -762,10 +762,12 @@ let state = null;
 /* ---------- Modelo de datos ---------- */
 
 // Emojis distintos y reconocibles para poder identificar cada pareja/equipo
-// de un vistazo en el draw, la clasificación y el resto de la app. Se
-// reparten sin repetir (mientras el pool alcance) al crear el torneo, y se
-// pueden cambiar a mano en cualquier momento desde la pestaña "Parejas".
-const EMOJI_POOL = ['🦁','🐯','🐻','🐼','🐨','🦊','🐺','🐸','🐵','🐶','🐱','🐹','🐰','🦝','🐷','🐮','🐗','🐴','🦄','🐔','🐧','🦉','🦇','🦓','🦍','🐘','🦏','🦛','🐪','🐫','🦒','🐃','🦌','🐕','🐓','🦃','🦚','🦜','🦢','🦩','🐢','🐍','🦎','🐙','🦑','🦀','🐠','🐬','🐳','🐊','🦋','🐝','🐞','🦂','🐌','🦕','🦖','🐉','🦭','🦥','🦦','🦡','🐿️','🐬'];
+// de un vistazo en el draw, la clasificación y el resto de la app. No son
+// solo animales: mezclan caras, comida, objetos, deporte y naturaleza para
+// que haya más variedad. Se reparten sin repetir (mientras el pool
+// alcance) al crear el torneo, y se pueden cambiar a mano en cualquier
+// momento desde la pestaña "Parejas".
+const EMOJI_POOL = ['🦁','🐯','🐼','🦊','🐸','🐵','🐶','🐱','🐰','🦄','🐧','🐢','🐙','🦑','🦀','🐬','🐳','🦋','🐝','🐞','😎','🤖','👻','🎃','🥳','🤠','🥸','🧙','🦸','👽','🤡','🦹','🧛','🧟','🧞','🥷','🍕','🍔','🌮','🍩','🍪','🍦','🍉','🍓','🍇','🍒','🥑','🍍','🌶️','🍿','🧁','🍭','🍫','🧃','🍋','🥥','🎩','👑','🎸','🥁','🎺','🎷','🎮','🎯','🎲','🃏','🧩','🔮','💎','🚀','🛸','🪁','🎨','📚','🔥','⚡','⚽','🏀','🏈','🎾','🏆','🎳','🏓','🥊','🏹','🛹','🌈','⭐','🌙','☀️','🌊','🍀','🌵','🌻','🌺','🍄','🌴','🍁','☘️','🌸','🌼','🧲','🎁','🔔','🗝️','⚓','🧿','🪄','🎈','🧸','🪅','🧨','🕹️','🧵','🪀'];
 function pickEmojis(count){
   const shuffled = [...EMOJI_POOL].sort(() => Math.random() - 0.5);
   const out = [];
