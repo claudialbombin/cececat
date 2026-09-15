@@ -525,6 +525,7 @@
     <div class="card">
       <h2>Jueces</h2>
       <p class="hint">Se reparten automáticamente entre las salas al generar cada ronda. El primero asignado a cada sala es el juez principal. En cuanto añades un juez con su email, le llega automáticamente su enlace personal — el mismo durante todo el torneo.</p>
+      <p class="hint">Despliega "Incompatibilidades" en cada juez para marcar parejas/equipos con los que no debería coincidir. <b>Objetiva</b>: nunca compartirán sala. <b>Subjetiva</b>: se evita siempre que se pueda, y si no queda otra, ese juez nunca será el principal de esa sala.</p>
       <div id="juecesBody"></div>
       <div class="row" style="margin-top:6px;">
         <div style="flex:2;">
@@ -812,7 +813,8 @@ function newState(name, formatKey, numPairs, pairNames, swingCount, roomNames, j
       judgeToken: j.judgeToken || genToken(),
       timesAssigned: 0,
       judgedPairs: [],
-      judgedWith: []
+      judgedWith: [],
+      incompatibilities: {}
     };
     nextJudgeId++;
   });
@@ -918,6 +920,35 @@ function ensurePairDefaults(){
   });
 }
 
+// Migración/reparación equivalente para jueces: torneos creados antes de la
+// función de incompatibilidades, o copias de seguridad/.json importadas, no
+// llevan el campo — se rellena vacío para que el resto del código pueda
+// asumir siempre que existe.
+function ensureJudgeDefaults(){
+  if (!state || !state.judges) return;
+  Object.values(state.judges).forEach(j => {
+    if (!j.incompatibilities) j.incompatibilities = {};
+  });
+}
+
+// Incompatibilidades juez↔pareja: 'objective' (nunca en la misma sala) o
+// 'subjective' (se evita si es posible; si no lo es, ese juez nunca puede
+// ser el principal de esa sala). pairIds es la lista de ids de pareja
+// presentes en una sala concreta.
+function judgeIncompatibility(judgeId, pairId){
+  const j = state.judges ? state.judges[judgeId] : null;
+  return (j && j.incompatibilities) ? j.incompatibilities[pairId] : undefined;
+}
+function judgeHasObjectiveConflict(judgeId, pairIds){
+  return (pairIds || []).some(pid => judgeIncompatibility(judgeId, pid) === 'objective');
+}
+function judgeHasSubjectiveConflict(judgeId, pairIds){
+  return (pairIds || []).some(pid => judgeIncompatibility(judgeId, pid) === 'subjective');
+}
+function pairIdsInRoomRoles(roles){
+  return Object.values(roles || {});
+}
+
 function calculateStandings(){
   return Object.keys(state.pairs).map(Number).sort((a,b)=>{
     const pa = state.pairs[a], pb = state.pairs[b];
@@ -1003,6 +1034,7 @@ function assignJudgesToRooms(roomsCount, idGroups){
 
   const pool = [...judgeIds];
   const maxPerRoom = Math.ceil(judgeIds.length / roomsCount);
+  const pairsInRoom = r => idGroups[r] || [];
 
   // Penaliza repetir: (a) jueces que ya han evaluado a alguna de las parejas
   // de esta sala en rondas anteriores, y (b) jueces que ya han coincidido
@@ -1011,7 +1043,7 @@ function assignJudgesToRooms(roomsCount, idGroups){
   // de mesa distintos siempre que sea posible.
   const conflictScore = (jid, roomIdx) => {
     const j = state.judges[jid];
-    const pairIdsHere = idGroups[roomIdx] || [];
+    const pairIdsHere = pairsInRoom(roomIdx);
     const judgedPairs = j.judgedPairs || [];
     const repeatPairs = pairIdsHere.filter(pid => judgedPairs.includes(pid)).length;
     const judgedWith = j.judgedWith || [];
@@ -1024,41 +1056,68 @@ function assignJudgesToRooms(roomsCount, idGroups){
   // hay alternativa) por sala. En cada paso se elige, entre TODAS las
   // combinaciones (sala, juez) aún pendientes, la de menor conflicto —
   // en vez de decidir sala por sala en orden fijo, que sesgaba siempre
-  // hacia la misma pareja de jueces.
+  // hacia la misma pareja de jueces. Una incompatibilidad OBJETIVA descarta
+  // por completo esa combinación (sala, juez) mientras exista alguna otra
+  // opción; una SUBJETIVA solo penaliza (se prefiere evitarla, pero no se
+  // descarta si es la única forma de completar las salas).
   const roomsNeedingChair = [];
   for (let r = 0; r < roomsCount; r++) roomsNeedingChair.push(r);
   while (roomsNeedingChair.length && pool.length){
-    let best = null;
+    let best = null, fallback = null;
     for (const r of roomsNeedingChair){
+      const pairIdsHere = pairsInRoom(r);
       for (const jid of pool){
         const j = state.judges[jid];
-        const score = [j.isTrainee ? 1 : 0, conflictScore(jid, r), j.timesAssigned || 0];
-        if (!best || compareTuples(score, best.score) < 0) best = { r, jid, score };
+        const objectiveConflict = judgeHasObjectiveConflict(jid, pairIdsHere);
+        const score = [
+          judgeHasSubjectiveConflict(jid, pairIdsHere) ? 1 : 0,
+          j.isTrainee ? 1 : 0,
+          conflictScore(jid, r),
+          j.timesAssigned || 0
+        ];
+        if (!objectiveConflict && (!best || compareTuples(score, best.score) < 0)) best = { r, jid, score };
+        if (!fallback || compareTuples(score, fallback.score) < 0) fallback = { r, jid, score };
       }
     }
-    assignments[best.r].push(best.jid);
-    pool.splice(pool.indexOf(best.jid), 1);
-    roomsNeedingChair.splice(roomsNeedingChair.indexOf(best.r), 1);
+    // Si TODAS las combinaciones restantes tienen incompatibilidad objetiva
+    // (muy pocos jueces para tantas restricciones), se usa la menos mala en
+    // vez de colgarse: fixObjectiveConflicts intentará arreglarlo después.
+    const chosen = best || fallback;
+    if (!chosen) break;
+    assignments[chosen.r].push(chosen.jid);
+    pool.splice(pool.indexOf(chosen.jid), 1);
+    roomsNeedingChair.splice(roomsNeedingChair.indexOf(chosen.r), 1);
   }
 
   // Resto de jueces (si hay más jueces que salas): igual, se elige en cada
   // paso la mejor combinación (sala con hueco, juez) disponible, respetando
-  // un reparto equilibrado (ninguna sala pasa de maxPerRoom).
+  // un reparto equilibrado (ninguna sala pasa de maxPerRoom) y las mismas
+  // reglas de incompatibilidad objetiva/subjetiva que en la primera pasada.
   while (pool.length){
-    let best = null;
+    let best = null, fallback = null;
     for (let r = 0; r < roomsCount; r++){
       if (assignments[r].length >= maxPerRoom) continue;
+      const pairIdsHere = pairsInRoom(r);
       for (const jid of pool){
-        const score = [conflictScore(jid, r), state.judges[jid].timesAssigned || 0];
-        if (!best || compareTuples(score, best.score) < 0) best = { r, jid, score };
+        const objectiveConflict = judgeHasObjectiveConflict(jid, pairIdsHere);
+        const score = [
+          judgeHasSubjectiveConflict(jid, pairIdsHere) ? 1 : 0,
+          conflictScore(jid, r),
+          state.judges[jid].timesAssigned || 0
+        ];
+        if (!objectiveConflict && (!best || compareTuples(score, best.score) < 0)) best = { r, jid, score };
+        if (!fallback || compareTuples(score, fallback.score) < 0) fallback = { r, jid, score };
       }
     }
-    if (!best) break; // no debería ocurrir, pero evita un bucle infinito
-    assignments[best.r].push(best.jid);
-    pool.splice(pool.indexOf(best.jid), 1);
+    const chosen = best || fallback;
+    if (!chosen) break; // no debería ocurrir, pero evita un bucle infinito
+    assignments[chosen.r].push(chosen.jid);
+    pool.splice(pool.indexOf(chosen.jid), 1);
   }
 
-  fixAllTraineeRooms(assignments);
+  fixObjectiveConflicts(assignments, idGroups);
+  fixAllTraineeRooms(assignments, idGroups);
+  fixSubjectiveChairConflicts(assignments, idGroups);
   return assignments;
 }
 
@@ -1066,10 +1125,11 @@ function assignJudgesToRooms(roomsCount, idGroups){
 // posible, un trainee va acompañado de al menos un juez no-trainee. Busca
 // salas "malas" (con jueces, pero todos trainee) y una sala "donante" que
 // pueda ceder un no-trainee sin quedarse ella misma sin ninguno, e
-// intercambia un juez de cada una. Si no hay donante posible (por ejemplo,
-// hay 0 o 1 jueces no-trainee en todo el torneo para 2+ salas), lo deja
-// como está: no siempre es posible.
-function fixAllTraineeRooms(assignments){
+// intercambia un juez de cada una (procurando no crear, de paso, una nueva
+// incompatibilidad objetiva en ninguna de las dos salas). Si no hay donante
+// posible (por ejemplo, hay 0 o 1 jueces no-trainee en todo el torneo para
+// 2+ salas), lo deja como está: no siempre es posible.
+function fixAllTraineeRooms(assignments, idGroups){
   const isTrainee = jid => !!(state.judges[jid] && state.judges[jid].isTrainee);
   let changed = true;
   let guard = 0;
@@ -1079,17 +1139,112 @@ function fixAllTraineeRooms(assignments){
     for (let r = 0; r < assignments.length; r++){
       const room = assignments[r];
       if (!room.length || !room.every(isTrainee)) continue;
-      let donorIdx = -1, donorNonTrainee = null;
+      const pairsHere = (idGroups && idGroups[r]) || [];
+      let donorIdx = -1, donorNonTrainee = null, traineeToMove = null;
       for (let d = 0; d < assignments.length; d++){
         if (d === r) continue;
+        const pairsThere = (idGroups && idGroups[d]) || [];
         const nonTrainees = assignments[d].filter(jid => !isTrainee(jid));
-        if (nonTrainees.length >= 2){ donorIdx = d; donorNonTrainee = nonTrainees[0]; break; }
+        if (nonTrainees.length < 2) continue;
+        const goodNonTrainee = nonTrainees.find(jid => !judgeHasObjectiveConflict(jid, pairsHere));
+        if (!goodNonTrainee) continue;
+        const goodTrainee = room.find(jid => !judgeHasObjectiveConflict(jid, pairsThere));
+        if (!goodTrainee) continue;
+        donorIdx = d; donorNonTrainee = goodNonTrainee; traineeToMove = goodTrainee;
+        break;
       }
-      if (donorIdx === -1) continue; // no hay forma de arreglarlo
-      const traineeToMove = room[0];
-      assignments[r][assignments[r].indexOf(traineeToMove)] = donorNonTrainee;
+      if (donorIdx === -1) continue; // no hay forma de arreglarlo sin crear otro choque
+      // El no-trainee que llega ocupa el puesto 0 (candidato a principal) de
+      // esta sala, y el trainee desplazado se coloca donde estaba ese puesto.
+      const traineeIdx = assignments[r].indexOf(traineeToMove);
+      assignments[r][traineeIdx] = assignments[r][0];
+      assignments[r][0] = donorNonTrainee;
       assignments[donorIdx][assignments[donorIdx].indexOf(donorNonTrainee)] = traineeToMove;
       changed = true;
+    }
+  }
+}
+
+// Ninguna incompatibilidad OBJETIVA debe sobrevivir al reparto: si el juez
+// en cuestión choca con alguna pareja de su sala, se busca en otra sala un
+// juez que sí sea compatible con ambas (con la suya y con la de destino) y
+// se intercambian. Si no existe ningún intercambio posible — por ejemplo, un
+// juez incompatible con casi todo el torneo y muy pocas salas — se deja como
+// está, que es la única situación en la que no se puede garantizar al 100%.
+function fixObjectiveConflicts(assignments, idGroups){
+  let changed = true, guard = 0;
+  while (changed && guard < 500){
+    changed = false; guard++;
+    for (let r = 0; r < assignments.length; r++){
+      const pairsHere = (idGroups && idGroups[r]) || [];
+      const room = assignments[r];
+      for (let i = 0; i < room.length; i++){
+        const jid = room[i];
+        if (!judgeHasObjectiveConflict(jid, pairsHere)) continue;
+        for (let r2 = 0; r2 < assignments.length; r2++){
+          if (r2 === r) continue;
+          const pairsThere = (idGroups && idGroups[r2]) || [];
+          const roomB = assignments[r2];
+          let swapped = false;
+          for (let k = 0; k < roomB.length; k++){
+            const candidate = roomB[k];
+            if (judgeHasObjectiveConflict(candidate, pairsHere)) continue; // seguiría chocando aquí
+            if (judgeHasObjectiveConflict(jid, pairsThere)) continue; // el desplazado chocaría allí
+            room[i] = candidate;
+            roomB[k] = jid;
+            changed = true;
+            swapped = true;
+            break;
+          }
+          if (swapped) break;
+        }
+      }
+    }
+  }
+}
+
+// El juez principal (puesto 0, Ⓒ) de una sala nunca puede tener una
+// incompatibilidad SUBJETIVA con una de las parejas de esa sala: si el
+// reparto lo ha dejado ahí (p.ej. porque era el único disponible), primero
+// se intenta cambiarlo de puesto con otro juez de la MISMA sala sin ese
+// choque; si no lo hay (sala de un solo juez, o todos chocan), se busca un
+// intercambio con otra sala que sea compatible con ambas.
+function fixSubjectiveChairConflicts(assignments, idGroups){
+  for (let r = 0; r < assignments.length; r++){
+    const room = assignments[r];
+    if (room.length < 2) continue; // con 0 o 1 juez no hay con quién cambiar
+    const pairsHere = (idGroups && idGroups[r]) || [];
+    if (!judgeHasSubjectiveConflict(room[0], pairsHere)) continue;
+
+    let fixedIdx = -1;
+    for (let idx = 1; idx < room.length; idx++){
+      if (!judgeHasSubjectiveConflict(room[idx], pairsHere) && !judgeHasObjectiveConflict(room[idx], pairsHere)){ fixedIdx = idx; break; }
+    }
+    if (fixedIdx !== -1){
+      [room[0], room[fixedIdx]] = [room[fixedIdx], room[0]];
+      continue;
+    }
+
+    const isTrainee = jid => !!(state.judges[jid] && state.judges[jid].isTrainee);
+    let done = false;
+    for (let r2 = 0; r2 < assignments.length && !done; r2++){
+      if (r2 === r) continue;
+      const pairsThere = (idGroups && idGroups[r2]) || [];
+      const roomB = assignments[r2];
+      for (let k = 0; k < roomB.length; k++){
+        const candidate = roomB[k];
+        if (judgeHasSubjectiveConflict(candidate, pairsHere) || judgeHasObjectiveConflict(candidate, pairsHere)) continue;
+        if (judgeHasObjectiveConflict(room[0], pairsThere) || judgeHasSubjectiveConflict(room[0], pairsThere)) continue;
+        // Que este intercambio no deje, de paso, alguna de las dos salas con
+        // solo jueces en prácticas.
+        const roomWouldBeAllTrainee = isTrainee(candidate) && room.slice(1).every(isTrainee);
+        const roomBWouldBeAllTrainee = isTrainee(room[0]) && roomB.filter((_, idx) => idx !== k).every(isTrainee);
+        if (roomWouldBeAllTrainee || roomBWouldBeAllTrainee) continue;
+        roomB[k] = room[0];
+        room[0] = candidate;
+        done = true;
+        break;
+      }
     }
   }
 }
@@ -1098,7 +1253,8 @@ function judgesCellHtmlResolved(judgesResolved){
   if (!judgesResolved || !judgesResolved.length) return '<span class="empty" style="padding:0;">Sin asignar</span>';
   return judgesResolved.map((j, idx) => {
     const isChair = (j.isChair !== undefined ? j.isChair : idx === 0) && !j.isTrainee;
-    return escapeHtml(j.name) + (isChair ? ' <b>Ⓒ</b>' : '') + (j.isTrainee ? ' <span style="color:#7a5b12;">Ⓣ</span>' : '');
+    const conflictMark = j.hasConflict ? ' <span title="Incompatibilidad sin poder evitar del todo en esta sala" style="color:#b23b3b;">⚠</span>' : '';
+    return escapeHtml(j.name) + (isChair ? ' <b>Ⓒ</b>' : '') + (j.isTrainee ? ' <span style="color:#7a5b12;">Ⓣ</span>' : '') + conflictMark;
   }).join(', ');
 }
 function judgesCellHtml(judgeIds){
@@ -2148,9 +2304,10 @@ function renderDraw(){
       const id = room.roles[role];
       cells[role] = { name: state.pairs[id].name, emoji: state.pairs[id].emoji || '', isSwing: !!state.pairs[id].isSwing };
     });
+    const pairIdsHere = pairIdsInRoomRoles(room.roles);
     const judgesResolved = (room.judges || []).map((jid, idx) => {
       const j = state.judges[jid];
-      return j ? { name: j.name, isTrainee: j.isTrainee, isChair: idx === 0 && !j.isTrainee } : null;
+      return j ? { name: j.name, isTrainee: j.isTrainee, isChair: idx === 0 && !j.isTrainee, hasConflict: judgeHasObjectiveConflict(jid, pairIdsHere) || judgeHasSubjectiveConflict(jid, pairIdsHere) } : null;
     }).filter(Boolean);
     return { label: room.label, cells, judgesResolved };
   });
@@ -2459,8 +2616,22 @@ document.getElementById('btnSaveSalas').addEventListener('click', () => {
 function renderJueces(){
   const container = document.getElementById('juecesBody');
   const ids = Object.keys(state.judges).map(Number).sort((a,b) => a-b);
+  const pairIds = state.pairs ? Object.keys(state.pairs).map(Number).sort((a,b) => a-b) : [];
   container.innerHTML = ids.map(id => {
     const j = state.judges[id];
+    const incompat = j.incompatibilities || {};
+    const incompatCount = pairIds.filter(pid => incompat[pid]).length;
+    const incompatRows = pairIds.map(pid => {
+      const val = incompat[pid] || '';
+      return `<label style="display:flex; align-items:center; gap:4px; font-size:12px; background:#f7ede0; padding:3px 8px; border-radius:8px; margin:0;">
+        ${escapeHtml(pairDisplayName(pid))}
+        <select data-judge="${id}" data-pair="${pid}" class="incompatSelect" style="margin:0; padding:1px 3px; font-size:11px;">
+          <option value="">—</option>
+          <option value="subjective" ${val === 'subjective' ? 'selected' : ''}>Subjetiva</option>
+          <option value="objective" ${val === 'objective' ? 'selected' : ''}>Objetiva</option>
+        </select>
+      </label>`;
+    }).join('');
     return `
     <div class="list-item">
       <input type="text" data-id="${id}" class="juezInput" value="${escapeHtml(j.name)}">
@@ -2470,6 +2641,12 @@ function renderJueces(){
       <button class="btn ghost small copyJuezLink" type="button" data-id="${id}">Copiar enlace</button>
       <button class="btn ghost small resendJuezEmail" type="button" data-id="${id}">Reenviar email</button>
       <button class="btn ghost small removeJuez" type="button" data-id="${id}">Quitar</button>
+      <details style="flex:1 0 100%; margin:2px 0 0;">
+        <summary style="cursor:pointer; font-size:12px; color:var(--text-soft);">Incompatibilidades${incompatCount ? ` (${incompatCount})` : ''}</summary>
+        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+          ${incompatRows || '<span class="empty" style="padding:0;">No hay parejas todavía.</span>'}
+        </div>
+      </details>
     </div>`;
   }).join('') || '<p class="empty">Todavía no has añadido ningún juez.</p>';
   container.querySelectorAll('.removeJuez').forEach(btn => {
@@ -2503,7 +2680,7 @@ document.getElementById('btnAddJuezTab').addEventListener('click', () => {
     showToast('Introduce un email válido para el juez — se usa para enviarle su enlace.');
     return;
   }
-  const judge = { name: val, isTrainee: trainee.checked, email, judgeToken: genToken(), timesAssigned: 0, judgedPairs: [], judgedWith: [] };
+  const judge = { name: val, isTrainee: trainee.checked, email, judgeToken: genToken(), timesAssigned: 0, judgedPairs: [], judgedWith: [], incompatibilities: {} };
   state.judges[state.nextJudgeId] = judge;
   state.nextJudgeId += 1;
   input.value = '';
@@ -2524,6 +2701,14 @@ document.getElementById('btnSaveJueces').addEventListener('click', () => {
   });
   document.querySelectorAll('.juezTraineeChk').forEach(chk => {
     state.judges[chk.dataset.id].isTrainee = chk.checked;
+  });
+  document.querySelectorAll('.incompatSelect').forEach(sel => {
+    const j = state.judges[sel.dataset.judge];
+    if (!j) return;
+    if (!j.incompatibilities) j.incompatibilities = {};
+    const pid = sel.dataset.pair;
+    if (sel.value) j.incompatibilities[pid] = sel.value;
+    else delete j.incompatibilities[pid];
   });
   saveState();
   showToast('Jueces guardados.');
@@ -2690,6 +2875,7 @@ function handleImportFile(file, onDone){
       state = parsed;
       recomputeJudgeStats();
       ensurePairDefaults();
+      ensureJudgeDefaults();
       saveState();
       showToast('Torneo cargado correctamente.');
       onDone();
@@ -2949,6 +3135,7 @@ async function initJudgeMode(token){
     state = saved;
     recomputeJudgeStats();
     ensurePairDefaults();
+    ensureJudgeDefaults();
     saveState();
     renderAll();
     tryRestoreAutosave();
