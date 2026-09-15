@@ -452,6 +452,10 @@
       </div>
       <span class="count-chip" id="judgeCount">0 jueces añadidos</span>
       <div class="oneByOneList" id="judgeList"></div>
+      <div class="subpanel" style="margin-top:18px;">
+        <label class="chk"><input type="checkbox" id="wizAllowIncompatChk" checked> Permitir incompatibilidades juez↔equipo</label>
+        <p class="hint" style="margin-top:6px;">Si lo activas, antes de generar el draw de la ronda 1 tanto los jueces como los equipos (que también recibirán su propio enlace por email) podrán proponer incompatibilidades objetivas o subjetivas, que tú aceptas o declinas. Si lo desactivas, esta función no aparece en ningún sitio y solo se envían enlaces a los jueces (como siempre).</p>
+      </div>
       <div class="footer-actions">
         <button class="btn ghost" id="wizBack6">Atrás</button>
         <button class="btn gold" id="btnCreateTournament">Crear torneo</button>
@@ -501,7 +505,7 @@
     <div class="card">
       <h2>Parejas inscritas</h2>
       <div class="hint">Puedes corregir un nombre, su emoji (para identificarla de un vistazo en el draw y la clasificación) o, en BP, el nombre de sus dos oradores, en cualquier momento sin perder sus resultados.</div>
-      <div class="hint">Si pones el email del representante del equipo, en cuanto guardes le llega automáticamente su enlace personal — antes de generar el draw de la ronda 1 puede usarlo para proponer incompatibilidades con jueces (que tú luego aceptas o declinas en la pestaña Incompatibilidades).</div>
+      <div class="hint" id="rosterIncompatHint">Si pones el email del representante del equipo, en cuanto guardes le llega automáticamente su enlace personal — antes de generar el draw de la ronda 1 puede usarlo para proponer incompatibilidades con jueces (que tú luego aceptas o declinas en la pestaña Incompatibilidades).</div>
       <div id="rosterBody"></div>
       <div class="footer-actions">
         <button class="btn" id="btnSaveRoster">Guardar nombres</button>
@@ -534,7 +538,7 @@
     <div class="card">
       <h2>Jueces</h2>
       <p class="hint">Se reparten automáticamente entre las salas al generar cada ronda. El primero asignado a cada sala es el juez principal. En cuanto añades un juez con su email, le llega automáticamente su enlace personal — el mismo durante todo el torneo.</p>
-      <p class="hint">Despliega "Incompatibilidades" en cada juez para marcar parejas/equipos con los que no debería coincidir. <b>Objetiva</b>: nunca compartirán sala. <b>Subjetiva</b>: se evita siempre que se pueda, y si no queda otra, ese juez nunca será el principal de esa sala.</p>
+      <p class="hint" id="juecesIncompatHint">Despliega "Incompatibilidades" en cada juez para marcar parejas/equipos con los que no debería coincidir. <b>Objetiva</b>: nunca compartirán sala. <b>Subjetiva</b>: se evita siempre que se pueda, y si no queda otra, ese juez nunca será el principal de esa sala.</p>
       <div id="juecesBody"></div>
       <div class="row" style="margin-top:6px;">
         <div style="flex:2;">
@@ -769,6 +773,9 @@ function ensureJudgeAndTournamentTokens(s){
     if (p.email === undefined) p.email = '';
   });
   if (s.incompatibilitiesLocked === undefined) s.incompatibilitiesLocked = false;
+  // Torneos creados antes de que existiera este interruptor ya podían tener
+  // datos de incompatibilidades, así que por defecto se quedan activados.
+  if (s.incompatibilitiesEnabled === undefined) s.incompatibilitiesEnabled = true;
 }
 function maybeSendJudgeEmail(judge, tournamentName){
   if (!judge || !judge.email || !judge.judgeToken) return;
@@ -796,6 +803,7 @@ function maybeSendJudgeEmail(judge, tournamentName){
 // texto distinto para las parejas, hace falta crear otra plantilla en
 // EmailJS y darme su ID.
 function maybeSendPairEmail(pair, tournamentName){
+  if (!state.incompatibilitiesEnabled) return;
   if (!pair || !pair.email || !pair.pairToken) return;
   const link = pairLinkUrl(pair.pairToken);
   if (!emailjsReady){
@@ -833,7 +841,7 @@ function pickEmojis(count){
   return out;
 }
 
-function newState(name, formatKey, numPairs, pairNames, swingCount, roomNames, judgesList, scoreCategories, speakerNames){
+function newState(name, formatKey, numPairs, pairNames, swingCount, roomNames, judgesList, scoreCategories, speakerNames, allowIncompat){
   swingCount = swingCount || 0;
   const fmt = FORMATS[formatKey];
   const pairs = {};
@@ -896,7 +904,8 @@ function newState(name, formatKey, numPairs, pairNames, swingCount, roomNames, j
     currentRound: 1,
     started: false,
     pendingPairings: null,
-    incompatibilitiesLocked: false
+    incompatibilitiesLocked: false,
+    incompatibilitiesEnabled: allowIncompat !== false
   };
 }
 
@@ -2083,14 +2092,15 @@ document.getElementById('wizNext4').addEventListener('click', () => {
 
 document.getElementById('btnCreateTournament').addEventListener('click', () => {
   const name = document.getElementById('wizName').value.trim() || 'Torneo de debate';
-  state = newState(name, setupFormat, wizTotalPairs, wizFinalNames, wizSwingsNeeded, wizRoomNames, wizJudges, wizScoreCategories, wizSpeakerEntries);
+  const wizAllowIncompat = document.getElementById('wizAllowIncompatChk').checked;
+  state = newState(name, setupFormat, wizTotalPairs, wizFinalNames, wizSwingsNeeded, wizRoomNames, wizJudges, wizScoreCategories, wizSpeakerEntries, wizAllowIncompat);
   saveState();
   if (wizSwingsNeeded > 0){
     showToast(`Torneo creado con ${wizSwingsNeeded} pareja${wizSwingsNeeded>1?'s':''} Swing de relleno.`);
   }
   renderAll();
   setupAutosave();
-  pushIncompatMetaToFirestore();
+  if (state.incompatibilitiesEnabled) pushIncompatMetaToFirestore();
 });
 
 /* ---------- Navegación ---------- */
@@ -2118,7 +2128,10 @@ function renderAll(){
   document.getElementById('hsRound').textContent = state.currentRound;
   document.getElementById('hsFormat').textContent = state.format === 'bp' ? 'British Parliamentary' : 'Académico';
   renderAutosaveStatus();
-  const activeBtn = document.querySelector('nav#mainNav button.active');
+  const incompatNavBtn = document.querySelector('nav#mainNav button[data-tab="incompat"]');
+  if (incompatNavBtn) incompatNavBtn.style.display = state.incompatibilitiesEnabled ? '' : 'none';
+  let activeBtn = document.querySelector('nav#mainNav button.active');
+  if (activeBtn && activeBtn.dataset.tab === 'incompat' && !state.incompatibilitiesEnabled) activeBtn = null;
   switchTab(activeBtn ? activeBtn.dataset.tab : 'ronda');
 }
 
@@ -2408,7 +2421,7 @@ function generatePairingsForRound(){
   }
   saveState();
   pushJudgeAssignmentsToFirestore();
-  pushIncompatMetaToFirestore();
+  if (state.incompatibilitiesEnabled) pushIncompatMetaToFirestore();
 }
 
 // Mantiene al día, en Firestore, los datos que necesitan las vistas de juez
@@ -2524,6 +2537,7 @@ async function pushJudgeAssignmentsToFirestore(){
         roundNumber: state.currentRound,
         assigned: false,
         judgeId: jid,
+        incompatEnabled: !!state.incompatibilitiesEnabled,
         updatedAt: Date.now()
       };
     } else {
@@ -2558,6 +2572,7 @@ async function pushJudgeAssignmentsToFirestore(){
         points: null,
         submittedByName: null,
         judgeId: jid,
+        incompatEnabled: !!state.incompatibilitiesEnabled,
         updatedAt: Date.now()
       };
     }
@@ -2672,11 +2687,15 @@ function renderRoster(){
       <input type="text" data-id="${id}" class="rosterInput" value="${escapeHtml(p.name)}" placeholder="Nombre de la pareja" style="flex:1.4; min-width:140px;">
       ${speakersHtml}
       ${swingBadge(id)}
+      ${state.incompatibilitiesEnabled ? `
       <input type="email" data-id="${id}" class="rosterEmailInput" value="${escapeHtml(p.email || '')}" placeholder="email del representante" style="flex:1.2; min-width:180px;">
       <button class="btn ghost small copyPairLink" type="button" data-id="${id}">Copiar enlace</button>
-      <button class="btn ghost small resendPairEmail" type="button" data-id="${id}">Reenviar email</button>
+      <button class="btn ghost small resendPairEmail" type="button" data-id="${id}">Reenviar email</button>` : ''}
     </div>`;
   }).join('');
+  const rosterHint = document.getElementById('rosterIncompatHint');
+  if (rosterHint) rosterHint.style.display = state.incompatibilitiesEnabled ? '' : 'none';
+  if (!state.incompatibilitiesEnabled) return;
   container.querySelectorAll('.copyPairLink').forEach(btn => {
     btn.addEventListener('click', () => {
       const p = state.pairs[btn.dataset.id];
@@ -2719,7 +2738,7 @@ document.getElementById('btnSaveRoster').addEventListener('click', () => {
   showToast('Nombres guardados.');
   renderRound();
   renderStandings();
-  pushIncompatMetaToFirestore();
+  if (state.incompatibilitiesEnabled) pushIncompatMetaToFirestore();
 });
 
 /* ---------- Salas ---------- */
@@ -2770,6 +2789,8 @@ document.getElementById('btnSaveSalas').addEventListener('click', () => {
 
 function renderJueces(){
   const container = document.getElementById('juecesBody');
+  const incompatHint = document.getElementById('juecesIncompatHint');
+  if (incompatHint) incompatHint.style.display = state.incompatibilitiesEnabled ? '' : 'none';
   const ids = Object.keys(state.judges).map(Number).sort((a,b) => a-b);
   const pairIds = state.pairs ? Object.keys(state.pairs).map(Number).sort((a,b) => a-b) : [];
   container.innerHTML = ids.map(id => {
@@ -2796,12 +2817,12 @@ function renderJueces(){
       <button class="btn ghost small copyJuezLink" type="button" data-id="${id}">Copiar enlace</button>
       <button class="btn ghost small resendJuezEmail" type="button" data-id="${id}">Reenviar email</button>
       <button class="btn ghost small removeJuez" type="button" data-id="${id}">Quitar</button>
-      <details style="flex:1 0 100%; margin:2px 0 0;">
+      ${state.incompatibilitiesEnabled ? `<details style="flex:1 0 100%; margin:2px 0 0;">
         <summary style="cursor:pointer; font-size:12px; color:var(--text-soft);">Incompatibilidades${incompatCount ? ` (${incompatCount})` : ''}</summary>
         <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
           ${incompatRows || '<span class="empty" style="padding:0;">No hay parejas todavía.</span>'}
         </div>
-      </details>
+      </details>` : ''}
     </div>`;
   }).join('') || '<p class="empty">Todavía no has añadido ningún juez.</p>';
   container.querySelectorAll('.removeJuez').forEach(btn => {
@@ -2809,7 +2830,7 @@ function renderJueces(){
       delete state.judges[btn.dataset.id];
       saveState();
       renderJueces();
-      pushIncompatMetaToFirestore();
+      if (state.incompatibilitiesEnabled) pushIncompatMetaToFirestore();
     });
   });
   container.querySelectorAll('.copyJuezLink').forEach(btn => {
@@ -2845,7 +2866,7 @@ document.getElementById('btnAddJuezTab').addEventListener('click', () => {
   saveState();
   renderJueces();
   maybeSendJudgeEmail(judge, state.tournamentName);
-  pushIncompatMetaToFirestore();
+  if (state.incompatibilitiesEnabled) pushIncompatMetaToFirestore();
 });
 document.getElementById('juezNuevoInput').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); document.getElementById('btnAddJuezTab').click(); } });
 document.getElementById('btnSaveJueces').addEventListener('click', () => {
@@ -2871,7 +2892,7 @@ document.getElementById('btnSaveJueces').addEventListener('click', () => {
   showToast('Jueces guardados.');
   renderJueces();
   renderRound();
-  pushIncompatMetaToFirestore();
+  if (state.incompatibilitiesEnabled) pushIncompatMetaToFirestore();
 });
 
 /* ---------- Incompatibilidades (revisión central) ----------
@@ -2897,8 +2918,12 @@ function renderIncompatLockStatus(){
 }
 
 async function renderIncompatibilidades(){
-  renderIncompatLockStatus();
   const body = document.getElementById('incompatBody');
+  if (!state.incompatibilitiesEnabled){
+    body.innerHTML = '<p class="empty">Este torneo se creó con las incompatibilidades desactivadas.</p>';
+    return;
+  }
+  renderIncompatLockStatus();
   if (!firebaseReady){
     body.innerHTML = '<p class="empty">Esta copia de CeceCat todavía no tiene activado Firestore, así que jueces y equipos no pueden enviar solicitudes de incompatibilidad de forma remota. Puedes seguir marcándolas tú misma desde las pestañas Jueces/Parejas.</p>';
     return;
@@ -3191,6 +3216,7 @@ document.getElementById('btnResetTournament').addEventListener('click', () => {
     window.scrollTo(0, 0);
     document.getElementById('wizName').value = '';
     document.getElementById('wizNumPairs').value = 16;
+    document.getElementById('wizAllowIncompatChk').checked = true;
     oneByOneNames = [];
     wizTargetN = 0;
     wizFinalNames = null;
@@ -3218,6 +3244,7 @@ let judgeActiveTab = 'turno';
 
 function renderJudgeView(token, data){
   const body = document.getElementById('judgeBody');
+  if (!data.incompatEnabled && judgeActiveTab === 'incompat') judgeActiveTab = 'turno';
   body.innerHTML = `
     <div class="step-eyebrow">${escapeHtml(data.tournamentName)} · Ronda ${data.roundNumber}</div>
     <div class="segmented" id="judgeTabSwitch" style="margin-bottom:14px;">
@@ -3227,9 +3254,9 @@ function renderJudgeView(token, data){
       <label class="option ${judgeActiveTab==='draw' ? 'checked' : ''}" data-jtab="draw" style="text-align:center;">
         <span class="opt-title">Draw</span>
       </label>
-      <label class="option ${judgeActiveTab==='incompat' ? 'checked' : ''}" data-jtab="incompat" style="text-align:center;">
+      ${data.incompatEnabled ? `<label class="option ${judgeActiveTab==='incompat' ? 'checked' : ''}" data-jtab="incompat" style="text-align:center;">
         <span class="opt-title">Incompatibilidades</span>
-      </label>
+      </label>` : ''}
     </div>
     <div id="judgeTabBody"></div>`;
   document.querySelectorAll('#judgeTabSwitch .option').forEach(el => {
