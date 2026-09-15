@@ -3246,7 +3246,7 @@ function renderJudgeView(token, data){
   const body = document.getElementById('judgeBody');
   if (!data.incompatEnabled && judgeActiveTab === 'incompat') judgeActiveTab = 'turno';
   body.innerHTML = `
-    <div class="step-eyebrow">${escapeHtml(data.tournamentName)} · Ronda ${data.roundNumber}</div>
+    <div class="step-eyebrow" id="judgeViewEyebrow">${escapeHtml(data.tournamentName)} · Ronda ${data.roundNumber}</div>
     <div class="segmented" id="judgeTabSwitch" style="margin-bottom:14px;">
       <label class="option ${judgeActiveTab==='turno' ? 'checked' : ''}" data-jtab="turno" style="text-align:center;">
         <span class="opt-title">Mi turno actual</span>
@@ -3275,8 +3275,25 @@ function renderJudgeTabBody(token, data){
   else renderJudgeTurnoTab(token, data);
 }
 
-function renderJudgeTurnoTab(token, data){
+async function renderJudgeTurnoTab(token, data){
   const el = document.getElementById('judgeTabBody');
+  // `data` puede venir de la carga inicial del enlace (hace rato, si el
+  // juez lo dejó abierto). Antes de decidir si tiene sala o no, se vuelve
+  // a pedir su ficha a Firestore — igual que ya hacen las pestañas Draw e
+  // Incompatibilidades — para que un draw generado/regenerado después de
+  // abrir el enlace se refleje aquí sin que el juez tenga que recargar.
+  if (firebaseReady && token){
+    el.innerHTML = 'Cargando…';
+    try{
+      const snap = await db.collection(JUDGEROOMS_COLLECTION).doc(token).get();
+      if (snap.exists){
+        Object.assign(data, snap.data());
+        const eyebrow = document.getElementById('judgeViewEyebrow');
+        if (eyebrow) eyebrow.textContent = `${data.tournamentName} · Ronda ${data.roundNumber}`;
+      }
+    }catch(e){ console.warn('No se pudo refrescar tu asignación', e); }
+  }
+  if (judgeActiveTab !== 'turno') return; // el juez cambió de pestaña mientras se refrescaba
   if (!data.assigned){
     el.innerHTML = `<p class="empty">Todavía no tienes sala asignada en esta ronda.</p>
       <p class="hint">Puede que la mesa central aún no haya generado los emparejamientos, o que esta ronda no te toque juzgar. Revisa la pestaña Draw, o vuelve a abrir este mismo enlace más tarde.</p>`;
