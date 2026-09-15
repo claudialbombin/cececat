@@ -387,6 +387,12 @@
         <div class="hint" id="importBpHint"></div>
       </div>
 
+      <!-- Sub-panel: nombres de los oradores (solo BP) -->
+      <div class="subpanel" id="panel-bpSpeakers" style="display:none;">
+        <p class="hint" style="margin-bottom:10px;">En British Parliamentary cada pareja tiene dos oradores, y los jueces puntúan a cada uno por separado — la suma de los dos da el total de la pareja. Introduce el nombre de cada orador (las parejas Swing usan "Orador 1" / "Orador 2" automáticamente, sin que haga falta rellenarlo).</p>
+        <div id="bpSpeakersList"></div>
+      </div>
+
       <div class="footer-actions">
         <button class="btn ghost" id="wizBack4">Atrás</button>
         <button class="btn gold" id="wizNext4">Siguiente</button>
@@ -486,7 +492,7 @@
   <section id="tab-parejas" class="tab-content" style="display:none;">
     <div class="card">
       <h2>Parejas inscritas</h2>
-      <div class="hint">Puedes corregir un nombre en cualquier momento sin perder sus resultados.</div>
+      <div class="hint">Puedes corregir un nombre, su emoji (para identificarla de un vistazo en el draw y la clasificación) o, en BP, el nombre de sus dos oradores, en cualquier momento sin perder sus resultados.</div>
       <div id="rosterBody"></div>
       <div class="footer-actions">
         <button class="btn" id="btnSaveRoster">Guardar nombres</button>
@@ -755,23 +761,42 @@ let state = null;
 
 /* ---------- Modelo de datos ---------- */
 
-function newState(name, formatKey, numPairs, pairNames, swingCount, roomNames, judgesList, scoreCategories){
+// Emojis distintos y reconocibles para poder identificar cada pareja/equipo
+// de un vistazo en el draw, la clasificación y el resto de la app. Se
+// reparten sin repetir (mientras el pool alcance) al crear el torneo, y se
+// pueden cambiar a mano en cualquier momento desde la pestaña "Parejas".
+const EMOJI_POOL = ['🦁','🐯','🐻','🐼','🐨','🦊','🐺','🐸','🐵','🐶','🐱','🐹','🐰','🦝','🐷','🐮','🐗','🐴','🦄','🐔','🐧','🦉','🦇','🦓','🦍','🐘','🦏','🦛','🐪','🐫','🦒','🐃','🦌','🐕','🐓','🦃','🦚','🦜','🦢','🦩','🐢','🐍','🦎','🐙','🦑','🦀','🐠','🐬','🐳','🐊','🦋','🐝','🐞','🦂','🐌','🦕','🦖','🐉','🦭','🦥','🦦','🦡','🐿️','🐬'];
+function pickEmojis(count){
+  const shuffled = [...EMOJI_POOL].sort(() => Math.random() - 0.5);
+  const out = [];
+  for (let i=0;i<count;i++) out.push(shuffled[i % shuffled.length]);
+  return out;
+}
+
+function newState(name, formatKey, numPairs, pairNames, swingCount, roomNames, judgesList, scoreCategories, speakerNames){
   swingCount = swingCount || 0;
   const fmt = FORMATS[formatKey];
   const pairs = {};
   const firstSwingIndex = numPairs - swingCount + 1;
+  const pairEmojis = pickEmojis(numPairs);
   for (let i=1;i<=numPairs;i++){
     const positions = {};
     fmt.roles.forEach(r => positions[r] = 0);
     const isSwing = swingCount > 0 && i >= firstSwingIndex;
     pairs[i] = {
       name: (pairNames && pairNames[i-1] && pairNames[i-1].trim()) ? pairNames[i-1].trim() : ("Pareja " + i),
+      emoji: pairEmojis[i-1],
       isSwing: isSwing,
       wins:0, item_points:0,
       positions,
       history: [],
       debates: []
     };
+    if (formatKey === 'bp'){
+      const sp = (speakerNames && speakerNames[i-1]) || null;
+      pairs[i].speaker1 = (!isSwing && sp && sp.s1 && sp.s1.trim()) ? sp.s1.trim() : 'Orador 1';
+      pairs[i].speaker2 = (!isSwing && sp && sp.s2 && sp.s2.trim()) ? sp.s2.trim() : 'Orador 2';
+    }
   }
 
   const judges = {};
@@ -824,9 +849,14 @@ function scoreFieldsFor(){
 }
 
 function computeSwingInfo(realCount, formatKey){
-  if (formatKey !== 'bp' || !realCount) return { swingsNeeded: 0, total: realCount || 0 };
-  const remainder = realCount % 4;
-  const swingsNeeded = remainder === 0 ? 0 : (4 - remainder);
+  if (!realCount) return { swingsNeeded: 0, total: 0 };
+  // Igual que en BP (salas de 4), en académico las salas son de 2: el total
+  // de parejas en pista siempre debe ser múltiplo del tamaño de sala, así
+  // que si el número real es impar/no encaja se añaden Swing de relleno
+  // (que no compiten por el trofeo) en vez de dejar a alguien descansando.
+  const roomSize = (FORMATS[formatKey] || FORMATS.academic).roomSize;
+  const remainder = realCount % roomSize;
+  const swingsNeeded = remainder === 0 ? 0 : (roomSize - remainder);
   return { swingsNeeded, total: realCount + swingsNeeded };
 }
 
@@ -838,6 +868,53 @@ function swingBadge(id){
 }
 
 function fmt(){ return FORMATS[state.format] || FORMATS.academic; }
+
+/* ---------- Nombre para mostrar (emoji + nombre) y etiquetas de puntuación ---------- */
+
+function pairDisplayName(id){
+  const p = state.pairs ? state.pairs[id] : null;
+  if (!p) return 'Pareja ' + id;
+  return (p.emoji ? p.emoji + ' ' : '') + p.name;
+}
+function cellDisplayName(cell){
+  if (!cell) return '?';
+  return (cell.emoji ? cell.emoji + ' ' : '') + (cell.name || '?');
+}
+// Las etiquetas de cada campo de puntuación: en académico son los apartados
+// (iguales para todas las parejas); en BP son los dos oradores de ESA pareja
+// en concreto (cada pareja tiene los suyos), y los jueces puntúan a cada uno.
+function pairScoreLabels(pairId){
+  const F = fmt();
+  if (F.roomSize === 4){
+    const p = (pairId != null && state.pairs) ? state.pairs[pairId] : null;
+    return [ (p && p.speaker1) || 'Orador 1', (p && p.speaker2) || 'Orador 2' ];
+  }
+  return (state.scoreCategories && state.scoreCategories.length) ? state.scoreCategories : ['Puntos'];
+}
+function scoreLabelsByRoleFor(roomRoles){
+  const F = fmt();
+  const obj = {};
+  F.roles.forEach(role => { obj[role] = pairScoreLabels((roomRoles || {})[role]); });
+  return obj;
+}
+
+// Migración/reparación: rellena emoji y (en BP) nombres de oradores que
+// falten — torneos creados con una versión anterior de CeceCat, o copias de
+// seguridad/.json importadas, no los llevan todavía.
+function ensurePairDefaults(){
+  if (!state || !state.pairs) return;
+  const ids = Object.keys(state.pairs).map(Number);
+  const used = new Set(Object.values(state.pairs).map(p => p.emoji).filter(Boolean));
+  const pool = EMOJI_POOL.filter(e => !used.has(e)).sort(() => Math.random() - 0.5);
+  ids.forEach(id => {
+    const p = state.pairs[id];
+    if (!p.emoji) p.emoji = pool.length ? pool.shift() : EMOJI_POOL[id % EMOJI_POOL.length];
+    if (state.format === 'bp'){
+      if (!p.speaker1) p.speaker1 = 'Orador 1';
+      if (!p.speaker2) p.speaker2 = 'Orador 2';
+    }
+  });
+}
 
 function calculateStandings(){
   return Object.keys(state.pairs).map(Number).sort((a,b)=>{
@@ -978,7 +1055,41 @@ function assignJudgesToRooms(roomsCount, idGroups){
     assignments[best.r].push(best.jid);
     pool.splice(pool.indexOf(best.jid), 1);
   }
+
+  fixAllTraineeRooms(assignments);
   return assignments;
+}
+
+// Ninguna sala debe quedar con SOLO jueces en prácticas: siempre que sea
+// posible, un trainee va acompañado de al menos un juez no-trainee. Busca
+// salas "malas" (con jueces, pero todos trainee) y una sala "donante" que
+// pueda ceder un no-trainee sin quedarse ella misma sin ninguno, e
+// intercambia un juez de cada una. Si no hay donante posible (por ejemplo,
+// hay 0 o 1 jueces no-trainee en todo el torneo para 2+ salas), lo deja
+// como está: no siempre es posible.
+function fixAllTraineeRooms(assignments){
+  const isTrainee = jid => !!(state.judges[jid] && state.judges[jid].isTrainee);
+  let changed = true;
+  let guard = 0;
+  while (changed && guard < 200){
+    changed = false;
+    guard++;
+    for (let r = 0; r < assignments.length; r++){
+      const room = assignments[r];
+      if (!room.length || !room.every(isTrainee)) continue;
+      let donorIdx = -1, donorNonTrainee = null;
+      for (let d = 0; d < assignments.length; d++){
+        if (d === r) continue;
+        const nonTrainees = assignments[d].filter(jid => !isTrainee(jid));
+        if (nonTrainees.length >= 2){ donorIdx = d; donorNonTrainee = nonTrainees[0]; break; }
+      }
+      if (donorIdx === -1) continue; // no hay forma de arreglarlo
+      const traineeToMove = room[0];
+      assignments[r][assignments[r].indexOf(traineeToMove)] = donorNonTrainee;
+      assignments[donorIdx][assignments[donorIdx].indexOf(donorNonTrainee)] = traineeToMove;
+      changed = true;
+    }
+  }
 }
 
 function judgesCellHtmlResolved(judgesResolved){
@@ -1012,7 +1123,7 @@ function buildDrawTableHtml(roleShort, roles, rooms, byeNames, hasJudges){
     html += `<tr><td class="roomcell">${escapeHtml(room.label)}</td>` +
       roles.map(role => {
         const c = (room.cells || {})[role] || {};
-        return `<td class="teamcell">${escapeHtml(c.name || '?')}${swingBadgeFor(c.name, c.isSwing)}</td>`;
+        return `<td class="teamcell">${escapeHtml(cellDisplayName(c))}${swingBadgeFor(c.name, c.isSwing)}</td>`;
       }).join('') +
       (hasJudges ? `<td class="judgescell">${judgesCellHtmlResolved(room.judgesResolved)}</td>` : '') +
       `</tr>`;
@@ -1334,6 +1445,9 @@ let wizRoomsNeeded = 0;
 let wizRoomNames = [];
 let wizJudges = [];
 let wizScoreCategories = ['Contenido', 'Estilo', 'Estrategia'];
+let step4Phase = 'names'; // 'names' | 'speakers' (BP: fase extra para los dos oradores de cada pareja)
+let wizRealCount = 0;
+let wizSpeakerEntries = []; // [{s1,s2}, ...] indexado igual que wizFinalNames (solo parejas reales, sin Swing)
 
 function goToStep(n){
   wizStep = n;
@@ -1382,7 +1496,10 @@ document.getElementById('wizNext3').addEventListener('click', () => {
 document.getElementById('wizNumPairs').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); document.getElementById('wizNext3').click(); } });
 document.getElementById('wizNumPairs').addEventListener('input', updateSwingHint);
 
-document.getElementById('wizBack4').addEventListener('click', () => goToStep(3));
+document.getElementById('wizBack4').addEventListener('click', () => {
+  if (step4Phase === 'speakers'){ exitBpSpeakerPhase(); return; }
+  goToStep(3);
+});
 
 document.getElementById('wizBack5').addEventListener('click', () => goToStep(4));
 document.getElementById('wizNext5').addEventListener('click', () => goToStep(6));
@@ -1412,8 +1529,8 @@ document.querySelectorAll('#modeSegmented .option').forEach(label => {
 function updateFormatHints(){
   const isBp = setupFormat === 'bp';
   document.getElementById('formatHint').textContent = isBp
-    ? 'Cada sala enfrenta a 4 parejas en las posiciones OG, OO, CG y CO. Cada orador recibe una puntuación entre 50 y 100; se suman los dos oradores de cada pareja y esa suma marca el ranking 1º–4º.'
-    : 'Cada sala enfrenta a 2 parejas, una a favor y otra en contra. Se puntúa por apartados (los que añadas abajo) y gana quien sume más puntos entre todos los apartados.';
+    ? 'Cada sala enfrenta a 4 parejas en las posiciones OG, OO, CG y CO. Cada pareja tiene dos oradores (con nombre propio); los jueces puntúan a cada uno entre 50 y 100 y se suman para dar el total de la pareja, que marca el ranking 1º–4º. Si el número de parejas no es múltiplo de 4 se añaden Swing de relleno.'
+    : 'Cada sala enfrenta a 2 parejas, una a favor y otra en contra. Se puntúa por apartados (los que añadas abajo) y gana quien sume más puntos entre todos los apartados. El número de parejas siempre debe ser par: si metes un número impar se añade una Swing de relleno para completar.';
   document.getElementById('academicCategoriesPanel').style.display = isBp ? 'none' : 'block';
 }
 updateFormatHints();
@@ -1451,16 +1568,31 @@ renderWizCategoryList();
 function swingText(n){
   const { swingsNeeded, total } = computeSwingInfo(n, setupFormat);
   if (!swingsNeeded) return '';
+  const roomSize = FORMATS[setupFormat].roomSize;
   const names = Array.from({ length: swingsNeeded }, (_, i) => 'Swing ' + (i+1)).join(', ');
-  return `Para completar salas de 4, se añadirán ${swingsNeeded} pareja${swingsNeeded>1?'s':''} de relleno: ${names} (total en pista: ${total}). No compiten por el trofeo.`;
+  return `Para completar salas de ${roomSize}, se añadirán ${swingsNeeded} pareja${swingsNeeded>1?'s':''} de relleno: ${names} (total en pista: ${total}). No compiten por el trofeo.`;
 }
 function updateSwingHint(){
   const n = parseInt(document.getElementById('wizNumPairs').value, 10) || 0;
-  document.getElementById('swingHint').textContent = setupFormat === 'bp' ? swingText(n) : '';
+  document.getElementById('swingHint').textContent = swingText(n);
 }
 function refreshStep4ForTarget(){
   const isBp = setupFormat === 'bp';
-  const bpText = isBp ? swingText(wizTargetN) : '';
+  step4Phase = 'names';
+  document.getElementById('panel-bpSpeakers').style.display = 'none';
+  document.getElementById('modeSegmented').style.display = '';
+  document.getElementById('wizNext4').textContent = 'Siguiente';
+  document.querySelector('#modeSegmented .option[data-mode="count"]').style.display = isBp ? 'none' : '';
+  if (isBp && setupMode === 'count'){
+    setupMode = 'oneByOne';
+    document.querySelectorAll('#modeSegmented .option').forEach(l => l.classList.toggle('checked', l.dataset.mode === 'oneByOne'));
+    const radio = document.querySelector('#modeSegmented .option[data-mode="oneByOne"] input');
+    if (radio) radio.checked = true;
+  }
+  document.getElementById('panel-count').style.display = setupMode === 'count' ? 'block' : 'none';
+  document.getElementById('panel-oneByOne').style.display = setupMode === 'oneByOne' ? 'block' : 'none';
+  document.getElementById('panel-import').style.display = setupMode === 'import' ? 'block' : 'none';
+  const bpText = swingText(wizTargetN);
   document.getElementById('countSummary').textContent = `Se generarán como "Pareja 1" ... "Pareja ${wizTargetN}". Podrás ponerles nombre real después, desde la pestaña Parejas.` + (bpText ? ' ' + bpText : '');
   document.getElementById('oneByOneBpHint').textContent = bpText;
   document.getElementById('importBpHint').textContent = bpText;
@@ -1630,7 +1762,60 @@ async function extractNamesFromPdf(arrayBuffer){
 
 /* ---------- Paso 4 -> 5: resolver nombres de parejas y calcular salas necesarias ---------- */
 
+function enterBpSpeakerPhase(){
+  step4Phase = 'speakers';
+  wizSpeakerEntries = Array.from({ length: wizRealCount }, (_, i) => wizSpeakerEntries[i] || { s1: '', s2: '' });
+  document.getElementById('modeSegmented').style.display = 'none';
+  document.getElementById('panel-count').style.display = 'none';
+  document.getElementById('panel-oneByOne').style.display = 'none';
+  document.getElementById('panel-import').style.display = 'none';
+  document.getElementById('panel-bpSpeakers').style.display = 'block';
+  document.getElementById('wizNext4').textContent = 'Siguiente';
+  renderBpSpeakerPanel();
+}
+function exitBpSpeakerPhase(){
+  step4Phase = 'names';
+  document.getElementById('panel-bpSpeakers').style.display = 'none';
+  document.getElementById('modeSegmented').style.display = '';
+  document.getElementById('panel-count').style.display = setupMode === 'count' ? 'block' : 'none';
+  document.getElementById('panel-oneByOne').style.display = setupMode === 'oneByOne' ? 'block' : 'none';
+  document.getElementById('panel-import').style.display = setupMode === 'import' ? 'block' : 'none';
+}
+function renderBpSpeakerPanel(){
+  const box = document.getElementById('bpSpeakersList');
+  box.innerHTML = wizFinalNames.slice(0, wizRealCount).map((n, i) => `
+    <div class="item" style="display:block;">
+      <div style="font-weight:700; margin-bottom:6px;">#${i+1} — ${escapeHtml(n || ('Pareja ' + (i+1)))}</div>
+      <div class="row">
+        <div style="flex:1;"><input type="text" data-i="${i}" data-f="s1" class="bpSpeakerInput" placeholder="Nombre del Orador 1" value="${escapeHtml(wizSpeakerEntries[i].s1)}"></div>
+        <div style="flex:1;"><input type="text" data-i="${i}" data-f="s2" class="bpSpeakerInput" placeholder="Nombre del Orador 2" value="${escapeHtml(wizSpeakerEntries[i].s2)}"></div>
+      </div>
+    </div>`).join('');
+  box.querySelectorAll('.bpSpeakerInput').forEach(inp => {
+    inp.addEventListener('input', () => {
+      wizSpeakerEntries[parseInt(inp.dataset.i, 10)][inp.dataset.f] = inp.value;
+    });
+  });
+}
+function proceedToRoomsStep(){
+  const roomSize = FORMATS[setupFormat].roomSize;
+  wizRoomsNeeded = Math.floor(wizTotalPairs / roomSize);
+  document.getElementById('roomsNeededHint').textContent =
+    `Con ${wizTotalPairs} parejas${wizSwingsNeeded ? ` (incluyendo ${wizSwingsNeeded} Swing)` : ''} se necesitarán ${wizRoomsNeeded} sala${wizRoomsNeeded===1?'':'s'} en cada ronda.`;
+  goToStep(5);
+}
+
 document.getElementById('wizNext4').addEventListener('click', () => {
+  if (step4Phase === 'speakers'){
+    const missing = wizSpeakerEntries.some(e => !e.s1.trim() || !e.s2.trim());
+    if (missing){
+      showToast('Rellena el nombre de los dos oradores de cada pareja.');
+      return;
+    }
+    proceedToRoomsStep();
+    return;
+  }
+
   let names = null;
   let realCount = 0;
 
@@ -1649,6 +1834,11 @@ document.getElementById('wizNext4').addEventListener('click', () => {
     realCount = names.length;
   }
 
+  if (setupFormat === 'bp' && names && names.some(n => !n.trim())){
+    showToast('En BP el nombre de cada pareja es obligatorio.');
+    return;
+  }
+
   const { swingsNeeded } = computeSwingInfo(realCount, setupFormat);
   const totalPairs = realCount + swingsNeeded;
 
@@ -1661,20 +1851,21 @@ document.getElementById('wizNext4').addEventListener('click', () => {
   wizFinalNames = finalNames;
   wizTotalPairs = totalPairs;
   wizSwingsNeeded = swingsNeeded;
-  const roomSize = FORMATS[setupFormat].roomSize;
-  wizRoomsNeeded = Math.floor(totalPairs / roomSize);
+  wizRealCount = realCount;
 
-  document.getElementById('roomsNeededHint').textContent =
-    `Con ${totalPairs} parejas${swingsNeeded ? ` (incluyendo ${swingsNeeded} Swing)` : ''} se necesitarán ${wizRoomsNeeded} sala${wizRoomsNeeded===1?'':'s'} en cada ronda.`;
+  if (setupFormat === 'bp'){
+    enterBpSpeakerPhase();
+    return;
+  }
 
-  goToStep(5);
+  proceedToRoomsStep();
 });
 
 /* ---------- Crear torneo (paso 6) ---------- */
 
 document.getElementById('btnCreateTournament').addEventListener('click', () => {
   const name = document.getElementById('wizName').value.trim() || 'Torneo de debate';
-  state = newState(name, setupFormat, wizTotalPairs, wizFinalNames, wizSwingsNeeded, wizRoomNames, wizJudges, wizScoreCategories);
+  state = newState(name, setupFormat, wizTotalPairs, wizFinalNames, wizSwingsNeeded, wizRoomNames, wizJudges, wizScoreCategories, wizSpeakerEntries);
   saveState();
   if (wizSwingsNeeded > 0){
     showToast(`Torneo creado con ${wizSwingsNeeded} pareja${wizSwingsNeeded>1?'s':''} Swing de relleno.`);
@@ -1804,27 +1995,28 @@ function renderRound(){
   const { rooms, byes } = state.pendingPairings;
   let html = '';
   if (byes.length){
-    html += `<div class="bye-note">Descansa esta ronda: ${byes.map(id => escapeHtml(state.pairs[id].name)).join(', ')} (no completan una sala).</div>`;
+    html += `<div class="bye-note">Descansa esta ronda: ${byes.map(id => escapeHtml(pairDisplayName(id))).join(', ')} (no completan una sala).</div>`;
   }
   const hasJudges = Object.keys(state.judges || {}).length > 0;
+  const SFR = scoreFieldsFor();
   rooms.forEach((room, ri) => {
     html += `<div class="pairing" data-room="${ri}"><div class="roomtitle">${escapeHtml(room.label || ('Sala ' + (ri+1)))}</div>`;
     if (hasJudges){
       html += `<div class="judge-line">Jueces: ${judgesCellHtml(room.judges)}</div>`;
     }
     html += judgeStatusBlockHtml(room, ri);
-    const SF = scoreFieldsFor();
     F.roles.forEach(role => {
       const id = room.roles[role];
-      const fieldsHtml = SF.labels.map((label, fi) => `
+      const fieldLabels = pairScoreLabels(id);
+      const fieldsHtml = fieldLabels.map((label, fi) => `
         <div class="scoreField">
           <label>${escapeHtml(label)}</label>
-          <input type="number" min="${SF.min}" ${SF.max != null ? `max="${SF.max}"` : ''} class="ptsInput" data-room="${ri}" data-role="${role}" data-field="${fi}" placeholder="${SF.max != null ? (SF.min + '–' + SF.max) : 'Puntos'}">
+          <input type="number" min="${SFR.min}" ${SFR.max != null ? `max="${SFR.max}"` : ''} class="ptsInput" data-room="${ri}" data-role="${role}" data-field="${fi}" placeholder="${SFR.max != null ? (SFR.min + '–' + SFR.max) : 'Puntos'}">
         </div>`).join('');
       html += `
       <div class="slot multi">
         <span class="role">${escapeHtml(F.roleShort[role])}</span>
-        <span class="pname">${escapeHtml(state.pairs[id].name)}${swingBadge(id)}</span>
+        <span class="pname">${escapeHtml(pairDisplayName(id))}${swingBadge(id)}</span>
         <div class="scoreFields" data-room="${ri}" data-role="${role}">${fieldsHtml}</div>
         <span class="badge scoreSum" data-room="${ri}" data-role="${role}">Total: —</span>
       </div>`;
@@ -1882,14 +2074,15 @@ function saveRoundResults(){
     const breakdown = {};
     for (const role of F.roles){
       const id = room.roles[role];
+      const fieldLabels = pairScoreLabels(id);
       const vals = [];
-      for (let fi=0; fi<SF.labels.length; fi++){
+      for (let fi=0; fi<fieldLabels.length; fi++){
         const input = document.querySelector(`.ptsInput[data-room="${ri}"][data-role="${role}"][data-field="${fi}"]`);
         const val = parseInt(input.value, 10);
         const outOfRange = isNaN(val) || val < SF.min || (SF.max != null && val > SF.max);
         if (outOfRange){
           const rangeText = SF.max != null ? `entre ${SF.min} y ${SF.max}` : `un número válido (mínimo ${SF.min})`;
-          showToast(`Rellena "${SF.labels[fi]}" de la Sala ${ri+1} con ${rangeText}.`);
+          showToast(`Rellena "${fieldLabels[fi]}" de la Sala ${ri+1} con ${rangeText}.`);
           return;
         }
         vals.push(val);
@@ -1903,7 +2096,7 @@ function saveRoundResults(){
       return;
     }
     const ranking = Object.keys(room.roles).map(role => room.roles[role]).sort((a,b) => points[b] - points[a]);
-    results.push({ roles: room.roles, points, breakdown, ranking, judges: room.judges || [], label: room.label });
+    results.push({ roles: room.roles, points, breakdown, ranking, judges: room.judges || [], label: room.label, scoreLabelsByRole: scoreLabelsByRoleFor(room.roles) });
   }
 
   results.forEach(r => applyRoomResult(r, state.currentRound));
@@ -1951,7 +2144,7 @@ function renderDraw(){
     const cells = {};
     F.roles.forEach(role => {
       const id = room.roles[role];
-      cells[role] = { name: state.pairs[id].name, isSwing: !!state.pairs[id].isSwing };
+      cells[role] = { name: state.pairs[id].name, emoji: state.pairs[id].emoji || '', isSwing: !!state.pairs[id].isSwing };
     });
     const judgesResolved = (room.judges || []).map((jid, idx) => {
       const j = state.judges[jid];
@@ -1959,7 +2152,7 @@ function renderDraw(){
     }).filter(Boolean);
     return { label: room.label, cells, judgesResolved };
   });
-  body.innerHTML = buildDrawTableHtml(F.roleShort, F.roles, resolvedRooms, byes.map(id => state.pairs[id].name), hasJudges);
+  body.innerHTML = buildDrawTableHtml(F.roleShort, F.roles, resolvedRooms, byes.map(id => pairDisplayName(id)), hasJudges);
 
   const fsBtn = document.createElement('button');
   fsBtn.className = 'btn ghost';
@@ -2002,7 +2195,7 @@ async function pushJudgeAssignmentsToFirestore(){
     const cells = {};
     F.roles.forEach(role => {
       const id = room.roles[role];
-      cells[role] = { name: state.pairs[id].name, isSwing: !!state.pairs[id].isSwing };
+      cells[role] = { name: state.pairs[id].name, emoji: state.pairs[id].emoji || '', isSwing: !!state.pairs[id].isSwing };
     });
     const judgesResolved = (room.judges || []).map((jid, idx) => {
       const j = state.judges[jid];
@@ -2019,7 +2212,7 @@ async function pushJudgeAssignmentsToFirestore(){
       roles: F.roles,
       roleShort: F.roleShort,
       hasJudges,
-      byes: byes.map(id => state.pairs[id].name),
+      byes: byes.map(id => pairDisplayName(id)),
       rooms: resolvedRooms,
       updatedAt: Date.now()
     });
@@ -2045,7 +2238,7 @@ async function pushJudgeAssignmentsToFirestore(){
       const cells = {};
       F.roles.forEach(role => {
         const id = room.roles[role];
-        cells[role] = { name: state.pairs[id].name, isSwing: !!state.pairs[id].isSwing };
+        cells[role] = { name: state.pairs[id].name, emoji: state.pairs[id].emoji || '', isSwing: !!state.pairs[id].isSwing };
       });
       const chairJudge = state.judges[room.judges[0]];
       const roomHasChair = !!(chairJudge && !chairJudge.isTrainee);
@@ -2063,6 +2256,7 @@ async function pushJudgeAssignmentsToFirestore(){
         label: room.label,
         cells,
         scoreLabels: SF.labels,
+        scoreLabelsByRole: scoreLabelsByRoleFor(room.roles),
         scoreMin: SF.min,
         scoreMax: SF.max,
         isChair,
@@ -2092,7 +2286,7 @@ function renderStandings(){
     const s = state.pairs[id];
     return `<tr>
       <td class="${i===0 && !s.isSwing ? 'pos-1' : ''}">${i+1}</td>
-      <td>${escapeHtml(s.name)}${swingBadge(id)}</td>
+      <td>${escapeHtml(pairDisplayName(id))}${swingBadge(id)}</td>
       <td>${s.wins}</td>
       <td>${s.item_points}</td>
       ${F.roles.map(role => `<td>${s.positions[role] || 0}</td>`).join('')}
@@ -2125,27 +2319,30 @@ function renderHistory(){
   [...state.rounds].reverse().forEach(r => {
     const F = FORMATS[r.format] || fmt();
     const byeText = r.byes && r.byes.length
-      ? ' · descansa ' + r.byes.map(id => escapeHtml(state.pairs[id]?.name || ('Pareja '+id))).join(', ')
+      ? ' · descansa ' + r.byes.map(id => escapeHtml(pairDisplayName(id))).join(', ')
       : '';
     html += `<details class="round-block" ${r.round_number === state.rounds.length ? 'open' : ''}>
       <summary>Ronda ${r.round_number}${byeText}</summary>
       <div class="content">`;
     const rLabels = (r.scoreLabels && r.scoreLabels.length) ? r.scoreLabels : ['Puntos'];
-    const showBreakdown = rLabels.length > 1;
+    const isBpRound = F.roomSize === 4;
+    const showBreakdown = isBpRound || rLabels.length > 1;
+    const headerLabel = isBpRound ? 'Oradores' : rLabels.map(escapeHtml).join(' + ');
     r.rooms.forEach((room, ri) => {
       const judgesLine = (room.judges && room.judges.length) ? `<div class="judge-line" style="margin-top:0;">Jueces: ${judgesCellHtml(room.judges)}</div>` : '';
       html += `<div class="roomlabel">${escapeHtml(room.label || ('Sala ' + (ri+1)))}</div>
         ${judgesLine}
         <table>
-          <thead><tr><th>Rol</th><th>Pareja</th>${showBreakdown ? `<th>${rLabels.map(escapeHtml).join(' + ')}</th>` : ''}<th>Total</th><th>Puesto</th></tr></thead>
+          <thead><tr><th>Rol</th><th>Pareja</th>${showBreakdown ? `<th>${headerLabel}</th>` : ''}<th>Total</th><th>Puesto</th></tr></thead>
           <tbody>
             ${F.roles.map(role => {
               const id = room.roles[role];
               const rank = room.ranking.indexOf(id) + 1;
-              const name = state.pairs[id]?.name || ('Pareja ' + id);
+              const name = state.pairs[id] ? pairDisplayName(id) : ('Pareja ' + id);
               const bd = room.breakdown ? room.breakdown[id] : null;
+              const theseLabels = (room.scoreLabelsByRole && room.scoreLabelsByRole[role]) || rLabels;
               const bdCell = showBreakdown
-                ? `<td>${bd ? bd.map((v,i) => `${escapeHtml(rLabels[i] || '')}: ${v}`).join(' · ') : '—'}</td>`
+                ? `<td>${bd ? bd.map((v,i) => `${escapeHtml(theseLabels[i] || '')}: ${v}`).join(' · ') : '—'}</td>`
                 : '';
               return `<tr>
                 <td>${escapeHtml(F.roleShort[role])}</td>
@@ -2168,12 +2365,21 @@ function renderHistory(){
 function renderRoster(){
   const container = document.getElementById('rosterBody');
   const ids = Object.keys(state.pairs).map(Number).sort((a,b) => a-b);
-  container.innerHTML = ids.map(id => `
+  const isBp = state.format === 'bp';
+  container.innerHTML = ids.map(id => {
+    const p = state.pairs[id];
+    const speakersHtml = isBp ? `
+      <input type="text" data-id="${id}" class="rosterSpeaker1Input" value="${escapeHtml(p.speaker1 || '')}" placeholder="Orador 1" style="flex:1; min-width:120px;">
+      <input type="text" data-id="${id}" class="rosterSpeaker2Input" value="${escapeHtml(p.speaker2 || '')}" placeholder="Orador 2" style="flex:1; min-width:120px;">` : '';
+    return `
     <div class="roster-item">
       <span class="num">#${id}</span>
-      <input type="text" data-id="${id}" class="rosterInput" value="${escapeHtml(state.pairs[id].name)}">
+      <input type="text" data-id="${id}" class="rosterEmojiInput" value="${escapeHtml(p.emoji || '')}" maxlength="4" title="Emoji de la pareja" style="flex:0 0 52px; text-align:center;">
+      <input type="text" data-id="${id}" class="rosterInput" value="${escapeHtml(p.name)}" placeholder="Nombre de la pareja" style="flex:1.4; min-width:140px;">
+      ${speakersHtml}
       ${swingBadge(id)}
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 document.getElementById('btnSaveRoster').addEventListener('click', () => {
@@ -2181,6 +2387,20 @@ document.getElementById('btnSaveRoster').addEventListener('click', () => {
     const id = inp.dataset.id;
     const val = inp.value.trim();
     if (val) state.pairs[id].name = val;
+  });
+  document.querySelectorAll('.rosterEmojiInput').forEach(inp => {
+    const id = inp.dataset.id;
+    state.pairs[id].emoji = inp.value.trim();
+  });
+  document.querySelectorAll('.rosterSpeaker1Input').forEach(inp => {
+    const id = inp.dataset.id;
+    const val = inp.value.trim();
+    if (val) state.pairs[id].speaker1 = val;
+  });
+  document.querySelectorAll('.rosterSpeaker2Input').forEach(inp => {
+    const id = inp.dataset.id;
+    const val = inp.value.trim();
+    if (val) state.pairs[id].speaker2 = val;
   });
   saveState();
   showToast('Nombres guardados.');
@@ -2319,7 +2539,7 @@ function renderSummary(){
   if (state.started && standings.length){
     const top = standings[0];
     const s = state.pairs[top];
-    leaderHtml = `<p>Líder actual: <b>${escapeHtml(s.name)}</b> — ${s.wins} ${fmt().primaryLabel.toLowerCase()}, ${s.item_points} puntos de ítem.</p>`;
+    leaderHtml = `<p>Líder actual: <b>${escapeHtml(pairDisplayName(top))}</b> — ${s.wins} ${fmt().primaryLabel.toLowerCase()}, ${s.item_points} puntos de ítem.</p>`;
   }
   el.innerHTML = `
     <p><b>Torneo:</b> ${escapeHtml(state.tournamentName)}</p>
@@ -2416,9 +2636,10 @@ function buildTxtReport(){
         const id = room.roles[role];
         const rank = room.ranking.indexOf(id) + 1;
         const p = state.pairs[id];
-        const name = (p?.name || ('Pareja ' + id)) + swingSuffix(p);
+        const name = (p ? pairDisplayName(id) : ('Pareja ' + id)) + swingSuffix(p);
         const bd = room.breakdown ? room.breakdown[id] : null;
-        const bdText = (bd && rLabels.length > 1) ? ' (' + bd.map((v,i) => `${rLabels[i] || ''}: ${v}`).join(', ') + ')' : '';
+        const theseLabels = (room.scoreLabelsByRole && room.scoreLabelsByRole[role]) || rLabels;
+        const bdText = (bd && theseLabels.length > 1) ? ' (' + bd.map((v,i) => `${theseLabels[i] || ''}: ${v}`).join(', ') + ')' : '';
         out += `  [${RF.roleShort[role]}] ${name}: ${room.points[id]} puntos de ítem${bdText} — puesto ${rank}º\n`;
       });
       if (room.judges && room.judges.length){
@@ -2432,7 +2653,7 @@ function buildTxtReport(){
       out += '\n';
     });
     if (r.byes && r.byes.length){
-      out += 'Descansan: ' + r.byes.map(id => state.pairs[id]?.name || ('Pareja '+id)).join(', ') + '\n\n';
+      out += 'Descansan: ' + r.byes.map(id => state.pairs[id] ? pairDisplayName(id) : ('Pareja '+id)).join(', ') + '\n\n';
     }
   });
 
@@ -2446,7 +2667,7 @@ function buildTxtReport(){
   standings.forEach((id, i) => {
     const s = state.pairs[id];
     const roleVals = F.roles.map(r => String(s.positions[r] || 0).padEnd(6)).join('');
-    const displayName = (s.name + swingSuffix(s)).padEnd(24);
+    const displayName = (pairDisplayName(id) + swingSuffix(s)).padEnd(24);
     out += `${String(i+1).padEnd(5)}${displayName}${String(s.wins).padEnd(16)}${String(s.item_points).padEnd(10)}${roleVals}\n`;
   });
   return out;
@@ -2466,6 +2687,7 @@ function handleImportFile(file, onDone){
       ensureJudgeAndTournamentTokens(parsed);
       state = parsed;
       recomputeJudgeStats();
+      ensurePairDefaults();
       saveState();
       showToast('Torneo cargado correctamente.');
       onDone();
@@ -2510,6 +2732,9 @@ document.getElementById('btnResetTournament').addEventListener('click', () => {
     wizRoomNames = [];
     wizJudges = [];
     wizScoreCategories = ['Contenido', 'Estilo', 'Estrategia'];
+    step4Phase = 'names';
+    wizRealCount = 0;
+    wizSpeakerEntries = [];
     document.getElementById('importPreview').value = '';
     document.getElementById('importStatus').textContent = 'Aún no se ha cargado ningún archivo.';
     renderWizRoomList();
@@ -2559,7 +2784,8 @@ function renderJudgeTurnoTab(token, data){
     return;
   }
   const F = FORMATS[data.format] || FORMATS.academic;
-  const labels = (data.scoreLabels && data.scoreLabels.length) ? data.scoreLabels : ['Puntos'];
+  const labelsByRole = data.scoreLabelsByRole || null;
+  const labels = (data.scoreLabels && data.scoreLabels.length) ? data.scoreLabels : (F.roomSize === 4 ? ['Orador 1', 'Orador 2'] : ['Puntos']);
   const min = (data.scoreMin !== undefined && data.scoreMin !== null) ? data.scoreMin : 0;
   const max = (data.scoreMax !== undefined) ? data.scoreMax : null;
   const chairEntry = (data.judgesResolved || []).find(j => j.isChair);
@@ -2592,14 +2818,15 @@ function renderJudgeTurnoTab(token, data){
     <div class="pairing" style="border:none; padding:0; margin-bottom:0;">
     ${F.roles.map(role => {
       const c = data.cells[role] || {};
-      const fieldsHtml = labels.map((label, fi) => `
+      const fieldLabels = (labelsByRole && labelsByRole[role]) || labels;
+      const fieldsHtml = fieldLabels.map((label, fi) => `
         <div class="scoreField">
           <label>${escapeHtml(label)}</label>
           <input type="number" min="${min}" ${max != null ? `max="${max}"` : ''} class="judgePtsInput" data-role="${role}" data-field="${fi}" placeholder="${max != null ? (min + '–' + max) : 'Puntos'}">
         </div>`).join('');
       return `<div class="slot multi">
         <span class="role">${escapeHtml(F.roleShort[role])}</span>
-        <span class="pname">${escapeHtml(c.name || '?')}${swingBadgeFor(c.name, c.isSwing)}</span>
+        <span class="pname">${escapeHtml(cellDisplayName(c))}${swingBadgeFor(c.name, c.isSwing)}</span>
         <div class="scoreFields">${fieldsHtml}</div>
       </div>`;
     }).join('')}
@@ -2608,7 +2835,7 @@ function renderJudgeTurnoTab(token, data){
       <button class="btn gold" type="button" id="btnSubmitJudge">Enviar puntuación</button>
     </div>`;
   el.innerHTML = html;
-  document.getElementById('btnSubmitJudge').addEventListener('click', () => submitJudgeScores(token, data, F, labels, min, max));
+  document.getElementById('btnSubmitJudge').addEventListener('click', () => submitJudgeScores(token, data, F, labelsByRole, labels, min, max));
 }
 
 async function renderJudgeDrawTab(data){
@@ -2633,17 +2860,18 @@ async function renderJudgeDrawTab(data){
   }
 }
 
-async function submitJudgeScores(token, data, F, labels, min, max){
+async function submitJudgeScores(token, data, F, labelsByRole, genericLabels, min, max){
   const points = {};
   for (const role of F.roles){
+    const fieldLabels = (labelsByRole && labelsByRole[role]) || genericLabels;
     const vals = [];
-    for (let fi=0; fi<labels.length; fi++){
+    for (let fi=0; fi<fieldLabels.length; fi++){
       const input = document.querySelector(`.judgePtsInput[data-role="${role}"][data-field="${fi}"]`);
       const val = parseInt(input.value, 10);
       const bad = isNaN(val) || val < min || (max != null && val > max);
       if (bad){
         const rangeText = max != null ? `entre ${min} y ${max}` : `un número válido (mínimo ${min})`;
-        showToast(`Rellena "${labels[fi]}" de todas las parejas con ${rangeText}.`);
+        showToast(`Rellena "${fieldLabels[fi]}" de todas las parejas con ${rangeText}.`);
         return;
       }
       vals.push(val);
@@ -2718,6 +2946,7 @@ async function initJudgeMode(token){
     ensureJudgeAndTournamentTokens(saved);
     state = saved;
     recomputeJudgeStats();
+    ensurePairDefaults();
     saveState();
     renderAll();
     tryRestoreAutosave();
